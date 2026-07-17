@@ -1,0 +1,16 @@
+task_id: empty-header-bug
+repository_url: https://github.com/example/empty-header-bug.git
+pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+issue_title: Empty headers discard the configured value
+issue_body: >-
+  When the incoming header is empty, parse_header returns the module default instead
+  of retaining the configured value. Nonempty headers continue to work as expected.
+approved_commands:
+  unit_tests:
+    argv:
+      - pytest
+      - -q
+allowed_source_paths:
+  - src
+  - tests
+timeout_seconds: 300

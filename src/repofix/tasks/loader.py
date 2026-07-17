@@ -118,5 +118,11 @@ def load_evaluator_task_bundle(path: Path) -> EvaluatorTaskBundle:
 
 
 def load_agent_task_spec(path: Path) -> AgentTaskSpec:
-    """Load a complete bundle and return only its agent-visible task data."""
-    return load_evaluator_task_bundle(path).agent_view()
+    """Load an agent-visible task or extract one from a complete evaluator bundle."""
+    document = _load_yaml_mapping(_read_text(path))
+    try:
+        if "task" in document:
+            return EvaluatorTaskBundle.model_validate(document).agent_view()
+        return AgentTaskSpec.model_validate(document)
+    except ValidationError as error:
+        _fail("task specification model validation failed", error)

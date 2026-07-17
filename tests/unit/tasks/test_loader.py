@@ -44,6 +44,23 @@ gold_patch:
     +++ b/file.py
 """
 
+VALID_AGENT_YAML = """\
+task_id: task-001
+repository_url: https://github.com/example/project.git
+pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+issue_title: Fix the failing behavior
+issue_body: The command produces an incorrect result.
+approved_commands:
+  unit_tests:
+    argv:
+      - pytest
+      - -q
+allowed_source_paths:
+  - src/repofix
+  - tests/unit
+timeout_seconds: 300
+"""
+
 
 class RecordingBytesIO(BytesIO):
     """In-memory binary file that records the requested read bound."""
@@ -87,6 +104,74 @@ def test_load_agent_task_spec_returns_only_agent_model(tmp_path: Path) -> None:
 
     assert type(task) is AgentTaskSpec
     assert task.task_id == "task-001"
+
+
+def test_loads_valid_agent_only_task_yaml(tmp_path: Path) -> None:
+    task = load_agent_task_spec(write_yaml(tmp_path, VALID_AGENT_YAML))
+
+    assert type(task) is AgentTaskSpec
+    assert task.task_id == "task-001"
+    assert task.allowed_source_paths == ("src/repofix", "tests/unit")
+
+
+def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Path) -> None:
+    task = load_agent_task_spec(write_yaml(tmp_path, VALID_BUNDLE_YAML))
+    serialized = task.model_dump()
+    rendered = repr(serialized)
+
+    assert type(task) is AgentTaskSpec
+    assert set(serialized) == set(AgentTaskSpec.model_fields)
+    assert "hidden_tests" not in rendered
+    assert "gold_patch" not in rendered
+    assert "tests/hidden" not in rendered
+    assert "diff --git" not in rendered
+
+
+@pytest.mark.parametrize(
+    "evaluator_data",
+    [
+        "hidden_tests:\n  commands:\n    hidden_tests:\n      argv: [pytest]\n",
+        "gold_patch:\n  patch: secret patch\n",
+    ],
+    ids=["hidden-tests", "gold-patch"],
+)
+def test_agent_only_document_rejects_evaluator_fields(
+    tmp_path: Path, evaluator_data: str
+) -> None:
+    contents = f"{VALID_AGENT_YAML}{evaluator_data}"
+
+    with pytest.raises(TaskSpecLoadError, match="model validation"):
+        load_agent_task_spec(write_yaml(tmp_path, contents))
+
+
+def test_top_level_task_key_requires_a_complete_evaluator_bundle(tmp_path: Path) -> None:
+    contents = "task:\n  task_id: task-001\n"
+
+    with pytest.raises(TaskSpecLoadError, match="model validation"):
+        load_agent_task_spec(write_yaml(tmp_path, contents))
+
+
+def test_agent_only_document_still_rejects_duplicate_keys(tmp_path: Path) -> None:
+    contents = VALID_AGENT_YAML.replace(
+        "task_id: task-001\n", "task_id: task-001\ntask_id: task-002\n"
+    )
+
+    with pytest.raises(TaskSpecLoadError, match="invalid YAML"):
+        load_agent_task_spec(write_yaml(tmp_path, contents))
+
+
+@pytest.mark.parametrize(
+    ("contents", "message"),
+    [
+        (VALID_AGENT_YAML.replace("task-001", "&task task-001"), "anchors"),
+        (VALID_AGENT_YAML.replace("task-001", "*missing"), "aliases"),
+    ],
+)
+def test_agent_only_document_still_rejects_yaml_references(
+    tmp_path: Path, contents: str, message: str
+) -> None:
+    with pytest.raises(TaskSpecLoadError, match=message):
+        load_agent_task_spec(write_yaml(tmp_path, contents))
 
 
 def test_agent_serialization_excludes_evaluator_data(tmp_path: Path) -> None:
