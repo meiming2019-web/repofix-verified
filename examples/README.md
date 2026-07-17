@@ -36,6 +36,27 @@ milestone.
 The fixture includes a local `pytest.ini` only so its intentional failure can be reproduced
 separately later. The read-only `repofix investigate` command does not execute that test suite.
 
+## Approved command execution substrate
+
+Approved commands are selected by an exact command ID; their argv comes only from trusted TaskSpec
+configuration and is executed as a sequence without a shell. Runtime and captured stdout and stderr
+are bounded, and credentials are removed from the reduced child environment. Executable resolution
+uses RepoFix's deterministic trusted search path—the active Python environment plus filtered system
+defaults—not the caller's complete `PATH`. Keep that active execution environment outside the target
+workspace so repository files cannot shadow its trusted tools.
+
+The local approved-command executor currently requires a POSIX host, such as macOS or Linux. It does
+not support Windows in this MVP; future Windows support requires a separately designed bounded pipe-
+cancellation implementation rather than a blocking reader-thread fallback.
+
+This execution substrate is not exposed to the LLM yet. A failing test command is raw evidence and
+is not automatically proof that the reported bug was reproduced. Repository test code still runs
+with the user's operating-system permissions. The timeout bounds RepoFix's own process and output-
+collection lifecycle, and cleanup performs best-effort termination of the original process group.
+A process that intentionally creates a new session may escape ordinary process-group termination.
+These limitations are another reason this executor is not a security sandbox: use a container or
+an OS-level sandbox before executing hostile repositories.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

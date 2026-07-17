@@ -10,6 +10,8 @@ approved_commands:
     argv:
       - pytest
       - -q
+      - -p
+      - no:cacheprovider
 allowed_source_paths:
   - src
   - tests
