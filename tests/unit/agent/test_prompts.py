@@ -1,6 +1,7 @@
 """Tests for deterministic read-only investigation prompts."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -12,7 +13,7 @@ from repofix.agent import (
     ToolObservation,
 )
 from repofix.agent.prompts import PromptConstructionError, build_investigation_messages
-from repofix.tasks import AgentTaskSpec
+from repofix.tasks import AgentTaskSpec, load_agent_task_spec
 
 
 def task_spec() -> AgentTaskSpec:
@@ -152,6 +153,54 @@ def test_prompt_contains_only_required_public_task_context() -> None:
     assert "hidden_tests" not in rendered
     assert "gold_patch" not in rendered
     assert "evaluator" not in rendered.lower()
+
+
+def test_prompt_from_reproduction_bundle_excludes_evaluator_expectations(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "reproduction.yaml"
+    path.write_text(
+        """\
+task:
+  task_id: prompt-reproduction-task
+  repository_url: https://github.com/example/project.git
+  pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+  issue_title: Parser returns the wrong value
+  issue_body: An empty header discards the configured value.
+  approved_commands:
+    unit_tests:
+      argv: [pytest, -q]
+  allowed_source_paths: [src, tests]
+  timeout_seconds: 300
+reproduction:
+  command_id: unit_tests
+  expected_exit_codes: [17]
+  required_fragments:
+    - fragment_id: required-sentinel-id
+      stream: combined
+      text: REQUIRED_SENTINEL_TEXT
+  forbidden_fragments:
+    - fragment_id: forbidden-sentinel-id
+      stream: combined
+      text: FORBIDDEN_SENTINEL_TEXT
+""",
+        encoding="utf-8",
+    )
+    task = load_agent_task_spec(path)
+
+    messages = build_investigation_messages(
+        task=task,
+        state=AgentState.initial("prompt-reproduction-task"),
+    )
+    user_prompt = messages[1]["content"]
+
+    assert '"reproduction"' not in user_prompt
+    assert "expected_exit_codes" not in user_prompt
+    assert "17" not in user_prompt
+    assert "required-sentinel-id" not in user_prompt
+    assert "REQUIRED_SENTINEL_TEXT" not in user_prompt
+    assert "forbidden-sentinel-id" not in user_prompt
+    assert "FORBIDDEN_SENTINEL_TEXT" not in user_prompt
 
 
 def test_later_prompt_contains_observations_and_hypotheses() -> None:

@@ -1,6 +1,11 @@
 """Task specification models and loading APIs."""
 
-from repofix.tasks.loader import TaskSpecLoadError, load_agent_task_spec, load_evaluator_task_bundle
+from repofix.tasks.loader import (
+    TaskSpecLoadError,
+    load_agent_task_spec,
+    load_evaluator_task_bundle,
+    load_reproduction_task_bundle,
+)
 from repofix.tasks.spec import (
     AgentTaskSpec,
     ApprovedCommand,
@@ -18,4 +23,5 @@ __all__ = [
     "TaskSpecLoadError",
     "load_agent_task_spec",
     "load_evaluator_task_bundle",
+    "load_reproduction_task_bundle",
 ]

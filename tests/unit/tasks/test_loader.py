@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from repofix.reproduction import ReproductionTaskBundle
 from repofix.tasks import (
     AgentTaskSpec,
     TaskSpecLoadError,
     load_agent_task_spec,
     load_evaluator_task_bundle,
+    load_reproduction_task_bundle,
 )
 from repofix.tasks.loader import MAX_TASK_SPEC_BYTES
 from repofix.tasks import loader
@@ -59,6 +61,36 @@ allowed_source_paths:
   - src/repofix
   - tests/unit
 timeout_seconds: 300
+"""
+
+VALID_REPRODUCTION_YAML = """\
+task:
+  task_id: task-001
+  repository_url: https://github.com/example/project.git
+  pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+  issue_title: Fix the failing behavior
+  issue_body: The command produces an incorrect result.
+  approved_commands:
+    unit_tests:
+      argv:
+        - pytest
+        - -q
+  allowed_source_paths:
+    - src/repofix
+    - tests/unit
+  timeout_seconds: 300
+reproduction:
+  command_id: unit_tests
+  expected_exit_codes:
+    - 1
+  required_fragments:
+    - fragment_id: sentinel-target-failure
+      stream: combined
+      text: SENTINEL target failure text
+  forbidden_fragments:
+    - fragment_id: sentinel-import-error
+      stream: combined
+      text: SENTINEL forbidden import text
 """
 
 
@@ -112,6 +144,87 @@ def test_loads_valid_agent_only_task_yaml(tmp_path: Path) -> None:
     assert type(task) is AgentTaskSpec
     assert task.task_id == "task-001"
     assert task.allowed_source_paths == ("src/repofix", "tests/unit")
+
+
+def test_loads_valid_reproduction_bundle(tmp_path: Path) -> None:
+    bundle = load_reproduction_task_bundle(
+        write_yaml(tmp_path, VALID_REPRODUCTION_YAML)
+    )
+
+    assert type(bundle) is ReproductionTaskBundle
+    assert bundle.reproduction.command_id == "unit_tests"
+    assert bundle.reproduction.expected_exit_codes == (1,)
+
+
+def test_reproduction_bundle_agent_loader_preserves_boundary(tmp_path: Path) -> None:
+    task = load_agent_task_spec(write_yaml(tmp_path, VALID_REPRODUCTION_YAML))
+    rendered = repr(task.model_dump())
+
+    assert type(task) is AgentTaskSpec
+    assert set(task.model_dump()) == set(AgentTaskSpec.model_fields)
+    assert "reproduction" not in rendered
+    assert "sentinel-target-failure" not in rendered
+    assert "SENTINEL target failure text" not in rendered
+    assert "sentinel-import-error" not in rendered
+
+
+def test_reproduction_loader_rejects_duplicate_keys(tmp_path: Path) -> None:
+    contents = VALID_REPRODUCTION_YAML.replace(
+        "  command_id: unit_tests\n",
+        "  command_id: unit_tests\n  command_id: other_tests\n",
+    )
+
+    with pytest.raises(TaskSpecLoadError, match="invalid YAML"):
+        load_reproduction_task_bundle(write_yaml(tmp_path, contents))
+
+
+@pytest.mark.parametrize(
+    ("contents", "message"),
+    [
+        (
+            VALID_REPRODUCTION_YAML.replace("task_id: task-001", "task_id: &id task-001"),
+            "anchors",
+        ),
+        (
+            VALID_REPRODUCTION_YAML.replace("command_id: unit_tests", "command_id: *id"),
+            "aliases",
+        ),
+    ],
+)
+def test_reproduction_loader_rejects_yaml_references(
+    tmp_path: Path, contents: str, message: str
+) -> None:
+    with pytest.raises(TaskSpecLoadError, match=message):
+        load_reproduction_task_bundle(write_yaml(tmp_path, contents))
+
+
+def test_reproduction_loader_rejects_malformed_expectation(tmp_path: Path) -> None:
+    contents = VALID_REPRODUCTION_YAML.replace("    - 1\n", "    - 0\n")
+
+    with pytest.raises(TaskSpecLoadError, match="model validation"):
+        load_reproduction_task_bundle(write_yaml(tmp_path, contents))
+
+
+def test_reproduction_loader_requires_approved_command_reference(tmp_path: Path) -> None:
+    contents = VALID_REPRODUCTION_YAML.replace(
+        "  command_id: unit_tests\n", "  command_id: other_tests\n"
+    )
+
+    with pytest.raises(TaskSpecLoadError, match="model validation"):
+        load_reproduction_task_bundle(write_yaml(tmp_path, contents))
+
+
+def test_agent_loader_rejects_ambiguous_evaluator_bundle(tmp_path: Path) -> None:
+    contents = (
+        f"{VALID_REPRODUCTION_YAML}"
+        "hidden_tests:\n"
+        "  commands:\n"
+        "    hidden_tests:\n"
+        "      argv: [pytest]\n"
+    )
+
+    with pytest.raises(TaskSpecLoadError, match="ambiguous"):
+        load_agent_task_spec(write_yaml(tmp_path, contents))
 
 
 def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Path) -> None:

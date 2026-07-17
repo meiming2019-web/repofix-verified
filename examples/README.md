@@ -57,6 +57,19 @@ A process that intentionally creates a new session may escape ordinary process-g
 These limitations are another reason this executor is not a security sandbox: use a container or
 an OS-level sandbox before executing hostile repositories.
 
+## Deterministic reproduction verification
+
+A raw command failure is evidence, not a reproduction verdict. Reproduction bundles keep literal
+expected signatures in trusted evaluator-only data; the investigating model receives only the
+contained agent task and never sees expected exit codes or required and forbidden fragments. The
+verifier is deterministic and does not use an LLM.
+
+`REPRODUCED` requires the configured nonzero exit code, every positive target signature, clean UTF-8
+output, and no forbidden signature. Import errors, collection errors, timeouts, output limits,
+decoding errors, missing target signatures, and unrelated failures are `INCONCLUSIVE`. Exit code
+zero is `NOT_REPRODUCED`. This milestone still does not generate, apply, or verify a patch. Local
+command execution remains POSIX-only and is not a security sandbox.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

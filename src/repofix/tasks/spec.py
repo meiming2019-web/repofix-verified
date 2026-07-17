@@ -10,14 +10,20 @@ _COMMAND_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
+def validate_command_name(name: str) -> str:
+    """Validate the shared stable identifier format for approved commands."""
+    if not _COMMAND_NAME_PATTERN.fullmatch(name):
+        raise ValueError(f"invalid command name: {name!r}")
+    return name
+
+
 def _validate_command_mapping(
     commands: dict[str, "ApprovedCommand"],
 ) -> dict[str, "ApprovedCommand"]:
     if not commands:
         raise ValueError("commands must not be empty")
     for name in commands:
-        if not _COMMAND_NAME_PATTERN.fullmatch(name):
-            raise ValueError(f"invalid command name: {name!r}")
+        validate_command_name(name)
     return commands
 
 

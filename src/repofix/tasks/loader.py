@@ -1,7 +1,9 @@
 """Safe loading for evaluator task specification bundles."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Never, cast
+from typing import TYPE_CHECKING, Any, Never, cast
 
 import yaml  # type: ignore[import-untyped]
 from pydantic import ValidationError
@@ -9,6 +11,9 @@ from yaml.nodes import MappingNode  # type: ignore[import-untyped]
 from yaml.tokens import AliasToken, AnchorToken  # type: ignore[import-untyped]
 
 from repofix.tasks.spec import AgentTaskSpec, EvaluatorTaskBundle
+
+if TYPE_CHECKING:
+    from repofix.reproduction.models import ReproductionTaskBundle
 
 
 MAX_TASK_SPEC_BYTES = 1024 * 1024
@@ -108,20 +113,47 @@ def _load_yaml_mapping(text: str) -> dict[Any, Any]:
     return document
 
 
+def _load_document(path: Path) -> dict[Any, Any]:
+    """Reuse the complete safe YAML path for every task bundle type."""
+    return _load_yaml_mapping(_read_text(path))
+
+
 def load_evaluator_task_bundle(path: Path) -> EvaluatorTaskBundle:
     """Load and validate a complete evaluator task bundle from YAML."""
-    document = _load_yaml_mapping(_read_text(path))
+    document = _load_document(path)
     try:
         return EvaluatorTaskBundle.model_validate(document)
     except ValidationError as error:
         _fail("task specification model validation failed", error)
 
 
+def load_reproduction_task_bundle(path: Path) -> ReproductionTaskBundle:
+    """Load and validate an evaluator-controlled reproduction task bundle."""
+    from repofix.reproduction.models import ReproductionTaskBundle
+
+    document = _load_document(path)
+    try:
+        return ReproductionTaskBundle.model_validate(document)
+    except ValidationError as error:
+        _fail("task specification model validation failed", error)
+
+
 def load_agent_task_spec(path: Path) -> AgentTaskSpec:
-    """Load an agent-visible task or extract one from a complete evaluator bundle."""
-    document = _load_yaml_mapping(_read_text(path))
+    """Load an agent task or extract it from one explicit evaluator bundle shape."""
+    document = _load_document(path)
     try:
         if "task" in document:
+            reproduction_fields = "reproduction" in document
+            repair_evaluator_fields = bool(
+                {"hidden_tests", "gold_patch"}.intersection(document)
+            )
+            if reproduction_fields and repair_evaluator_fields:
+                cause = ValueError("incompatible evaluator bundle fields were mixed")
+                _fail("task specification bundle shape is ambiguous", cause)
+            if reproduction_fields:
+                from repofix.reproduction.models import ReproductionTaskBundle
+
+                return ReproductionTaskBundle.model_validate(document).agent_view()
             return EvaluatorTaskBundle.model_validate(document).agent_view()
         return AgentTaskSpec.model_validate(document)
     except ValidationError as error:

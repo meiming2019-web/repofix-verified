@@ -294,7 +294,7 @@ def test_agent_view_excludes_evaluator_only_information() -> None:
     assert "SECRET PATCH CONTENT" not in repr(serialized)
 
 
-@pytest.mark.parametrize("field", ["hidden_tests", "gold_patch"])
+@pytest.mark.parametrize("field", ["hidden_tests", "gold_patch", "reproduction"])
 def test_agent_task_rejects_evaluator_only_fields(field: str) -> None:
     data = valid_task_data()
     data[field] = {}

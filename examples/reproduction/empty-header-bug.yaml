@@ -1,0 +1,40 @@
+task:
+  task_id: empty-header-bug
+  repository_url: https://github.com/example/empty-header-bug.git
+  pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+  issue_title: Empty headers discard the configured value
+  issue_body: >-
+    When the incoming header is empty, parse_header returns the module default instead
+    of retaining the configured value. Nonempty headers continue to work as expected.
+  approved_commands:
+    unit_tests:
+      argv:
+        - pytest
+        - -q
+        - -p
+        - no:cacheprovider
+  allowed_source_paths:
+    - src
+    - tests
+  timeout_seconds: 300
+reproduction:
+  command_id: unit_tests
+  expected_exit_codes:
+    - 1
+  required_fragments:
+    - fragment_id: target-test-name
+      stream: combined
+      text: test_empty_header_retains_configured_value
+    - fragment_id: target-assertion
+      stream: combined
+      text: "assert 'default' == 'configured'"
+    - fragment_id: expected-test-count
+      stream: combined
+      text: 1 failed, 1 passed
+  forbidden_fragments:
+    - fragment_id: module-import-error
+      stream: combined
+      text: ModuleNotFoundError
+    - fragment_id: pytest-collection-error
+      stream: combined
+      text: ERROR collecting
