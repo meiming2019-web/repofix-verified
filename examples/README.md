@@ -178,6 +178,22 @@ sandbox. It does not run reproduction, regression, or hidden tests and does not 
 correct or the bug is fixed. The next milestone performs independent post-patch reproduction
 verification.
 
+## Post-patch reproduction verification
+
+After controlled application, RepoFix can rerun the same configured reproduction command exactly once
+and evaluate its bounded evidence with the same evaluator-owned reproduction expectation. This stage
+does not involve a model, generate another patch, retry the command, or reinterpret the established
+fragment, exit-code, timeout, and output-limit rules.
+
+The result distinguishes whether the original behavior was not reproduced, remained reproduced, or
+could not be decided conclusively. Absence of the original behavior is not a complete repair verdict:
+only the original reproduction has been checked, while broader regression tests and hidden verification
+have not run. Applied proposal targets are safely rechecked against their candidate hashes before the
+command and checked again afterward so unexpected command-time source mutation invalidates the result.
+
+Command execution remains bounded and POSIX-only. It uses the prepared local workspace with the user's
+operating-system permissions and is not an OS security sandbox.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your
