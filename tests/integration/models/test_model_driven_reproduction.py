@@ -1,10 +1,12 @@
 """Integration of the OpenAI adapter with the reproduction workflow."""
 
+import hashlib
 from types import SimpleNamespace
 
 from repofix.agent import (
     AgentPhase,
     IssueUnderstanding,
+    ReadFileResult,
     RecordHypothesisAction,
     RepairHypothesis,
     RunApprovedCommandAction,
@@ -51,6 +53,12 @@ class FakeTools:
 
     def read_file(self, path: str, start_line: int, end_line: int) -> str:
         return "2: return WRONG"
+
+    def read_file_with_metadata(self, path: str, start_line: int, end_line: int) -> ReadFileResult:
+        return ReadFileResult(
+            output=self.read_file(path, start_line, end_line),
+            full_file_sha256=hashlib.sha256(b"complete fake source").hexdigest(),
+        )
 
 
 class FakeCommandGateway:

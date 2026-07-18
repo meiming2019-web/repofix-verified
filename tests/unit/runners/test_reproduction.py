@@ -10,6 +10,8 @@ from repofix.agent import (
     AgentWorkflow,
     ReproductionAgentRunResult,
 )
+from repofix.agent.reproduction_loop import compute_task_fingerprint
+from repofix.reproduction import compute_reproduction_expectation_fingerprint
 from repofix.runners import run_reproduction_from_paths
 from repofix.tasks import AgentTaskSpec, TaskSpecLoadError
 
@@ -69,6 +71,10 @@ def test_runner_loads_bundle_and_builds_both_real_gateway_boundaries(
                 reproduction_command_id="unit_tests",
             ),
             attempts=(),
+            task_fingerprint=compute_task_fingerprint(task),
+            reproduction_expectation_fingerprint=(
+                compute_reproduction_expectation_fingerprint(kwargs["expectation"])
+            ),
         )
 
     monkeypatch.setattr(reproduction_runner, "LocalReadOnlyToolGateway", FakeTools)

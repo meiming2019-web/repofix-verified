@@ -96,6 +96,69 @@ status means the reported behavior was observed, not that it was `FIXED`. This w
 patch and performs no repair verification. Local command execution remains POSIX-only and is still
 not a security sandbox.
 
+## Controlled patch proposals
+
+Patchable paths are explicit task configuration and are separate from the broader readable paths.
+For the fixture, the Agent may read `src` and `tests`, but only `src` is patchable, and a proposal may
+target only a source file that was successfully read during the reproduced investigation. The model
+returns bounded one-based inclusive line-range replacements—not shell commands or raw diff text.
+
+The trusted read-only gateway hashes each complete bounded file when a successful `read_file`
+observation is recorded; the hash is not derived from the rendered excerpt or supplied by the model.
+Every patch target must still match that reproduction-read hash. Conflicting hashes from repeated
+reads are rejected as ambiguous. Files the Agent never read remain covered only by the broader
+prepared-workspace trust assumption and cannot become patch targets.
+
+The workspace is assumed to remain locally controlled throughout proposal validation. Concurrent
+adversarial mutation is outside this MVP's threat model.
+
+The reproduction result is bound separately to the complete agent task and the complete evaluator
+reproduction expectation through deterministic SHA-256 fingerprints. The expectation fingerprint is
+never model-visible. The validated proposal carries both fingerprints and one system-owned snapshot
+for every edited path. Agent state requires unique hypothesis IDs, and a draft must resolve to exactly
+one supported hypothesis.
+
+Repository-relative paths reject control, format, and surrogate characters so filenames cannot forge
+diff headers or audit output, including Unicode line and paragraph separators. Logical paths must use
+the exact spelling returned by their repository directory entries, so case aliases on case-insensitive
+filesystems are rejected. Distinct logical paths that identify the same physical file, including hard
+links and filesystem aliases, cannot occur in one proposal.
+
+Uniform LF and uniform CRLF source files are supported; replacement text is normalized to the source
+convention, mixed or lone-carriage-return files are rejected, and final newline state is preserved.
+Per-edit and total replacement limits are checked again against the exact normalized text stored in
+the validated proposal, including CRLF expansion, with no truncation. Aggregate deletion edits are
+rejected if their in-memory candidate would empty an entire file. The final logical-path snapshot check
+occurs after proposal construction and immediately before return. Validated proposals also carry the
+complete task fingerprint, which a future application step must match against its current task before
+writing.
+
+RepoFix renders a standard deterministic unified diff with LF metadata separators, exact LF or CRLF
+hunk content, and `\ No newline at end of file` markers where required. The preview has no timestamps,
+uses stable file and hunk ordering, and represents the exact in-memory candidate bytes. LF, CRLF, and
+missing-final-newline previews are checked with the system Git implementation in tests. The structured
+OpenAI output budget is larger than the combined accepted replacement, rationale, and summary bounds;
+length and content-filter terminations are treated as bounded operational failures without retries.
+
+Initial and final snapshot reads use the same POSIX `O_NOFOLLOW` descriptor path. Before and after each
+bounded read, validation repeats exact directory-entry spelling and parent-symlink checks and compares
+resolved path, device, inode, mode, link count, size, modification time, and change time across logical
+path and descriptor metadata. Files larger than the source bound are rejected before full allocation,
+and every target must have exactly one hard link. A second hard link may alias data outside the
+workspace, so future controlled application must enforce the same rule.
+
+There is an unavoidable concurrency boundary after the final check because validation does not hold an
+OS-level file lock. Future controlled application must independently repeat the complete snapshot
+validation immediately before writing. A proposal digest is deterministic integrity metadata, not an
+authenticity mechanism; deserialized proposals must never be trusted without task, expectation, and
+workspace revalidation.
+
+Model-authored proposal text remains explicitly labeled as such. RepoFix separately records the fixed
+status `structurally_validated_unapplied` and states only that structural validation passed. No proposal
+is applied, no post-patch tests are run, and no hidden verification occurs. A validated proposal is not
+proof of correctness or a successful repair. Repository command execution remains POSIX-only and is
+not a security sandbox.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

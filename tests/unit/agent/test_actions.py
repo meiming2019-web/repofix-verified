@@ -277,6 +277,27 @@ def test_tool_observation_enforces_success_error_consistency() -> None:
             error="unexpected error",
         )
 
+    with pytest.raises(ValidationError, match="full-file SHA-256"):
+        ToolObservation(
+            step_index=0,
+            tool_name="read_file",
+            arguments={"path": "src/a.py"},
+            success=True,
+            output="1: value\n",
+            error=None,
+        )
+
+    with pytest.raises(ValidationError, match="only successful read-file"):
+        ToolObservation(
+            step_index=0,
+            tool_name="search_code",
+            arguments={"query": "value"},
+            success=True,
+            output="src/a.py:1:value",
+            error=None,
+            full_file_sha256="a" * 64,
+        )
+
     with pytest.raises(ValidationError):
         ToolObservation(
             step_index=0,
@@ -286,6 +307,16 @@ def test_tool_observation_enforces_success_error_consistency() -> None:
             output="",
             error=" ",
         )
+
+
+def test_agent_state_rejects_duplicate_hypothesis_ids() -> None:
+    supported = RepairHypothesis.model_validate(hypothesis_data())
+    rejected = supported.model_copy(update={"description": "different cause", "status": "rejected"})
+    data = state_data(phase=AgentPhase.HYPOTHESIZE)
+    data["hypotheses"] = (supported, rejected)
+
+    with pytest.raises(ValidationError, match="hypothesis IDs must be unique"):
+        AgentState.model_validate(data)
 
 
 def reproduction_observation(

@@ -10,6 +10,7 @@ from repofix.reproduction.models import (
     ReproductionTaskBundle,
     ReproductionTerminationReason,
     ReproductionVerdict,
+    compute_reproduction_expectation_fingerprint,
 )
 from repofix.reproduction.verifier import (
     COMBINED_OUTPUT_SEPARATOR,
@@ -28,6 +29,7 @@ __all__ = [
     "ReproductionTaskBundle",
     "ReproductionTerminationReason",
     "ReproductionVerdict",
+    "compute_reproduction_expectation_fingerprint",
     "ReproductionVerificationError",
     "verify_reproduction",
 ]

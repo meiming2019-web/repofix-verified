@@ -1,9 +1,12 @@
 """Validated data models for RepoFix task specifications."""
 
 import re
+import unicodedata
+from pathlib import PurePosixPath
+from typing import Self
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 _COMMAND_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -15,6 +18,21 @@ def validate_command_name(name: str) -> str:
     if not _COMMAND_NAME_PATTERN.fullmatch(name):
         raise ValueError(f"invalid command name: {name!r}")
     return name
+
+
+def validate_relative_source_path(path: str, *, description: str) -> str:
+    """Validate one normalized repository-relative POSIX path."""
+    if not path:
+        raise ValueError(f"{description} must not be empty")
+    if any(unicodedata.category(character) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for character in path):
+        raise ValueError(f"{description} must not contain control or format characters")
+    if "\\" in path:
+        raise ValueError(f"{description} must use POSIX separators")
+    if path.startswith("/"):
+        raise ValueError(f"{description} must be repository-relative")
+    if any(component in {"", ".", ".."} for component in path.split("/")):
+        raise ValueError(f"{description} must not contain redundant components")
+    return path
 
 
 def _validate_command_mapping(
@@ -67,6 +85,7 @@ class AgentTaskSpec(StrictFrozenModel):
     issue_body: str
     approved_commands: dict[str, ApprovedCommand]
     allowed_source_paths: tuple[str, ...]
+    patchable_source_paths: tuple[str, ...] = ()
     timeout_seconds: int = Field(ge=1, le=3600)
 
     @field_validator("task_id", "issue_title")
@@ -119,18 +138,33 @@ class AgentTaskSpec(StrictFrozenModel):
         if not paths:
             raise ValueError("allowed source paths must not be empty")
         for path in paths:
-            if not path:
-                raise ValueError("allowed source paths must not be empty")
-            if "\0" in path:
-                raise ValueError("allowed source paths must not contain NUL bytes")
-            if "\\" in path:
-                raise ValueError("allowed source paths must use POSIX separators")
-            if path.startswith("/"):
-                raise ValueError("allowed source paths must be repository-relative")
-            components = path.split("/")
-            if any(component in {"", ".", ".."} for component in components):
-                raise ValueError("allowed source paths must not contain redundant components")
+            validate_relative_source_path(path, description="allowed source paths")
         return paths
+
+    @field_validator("patchable_source_paths", mode="before")
+    @classmethod
+    def normalize_patchable_paths(cls, value: object) -> tuple[object, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("patchable source paths must be a list or tuple")
+        return tuple(value)
+
+    @field_validator("patchable_source_paths")
+    @classmethod
+    def validate_patchable_paths(cls, paths: tuple[str, ...]) -> tuple[str, ...]:
+        if len(paths) != len(set(paths)):
+            raise ValueError("patchable source paths must be unique")
+        for path in paths:
+            validate_relative_source_path(path, description="patchable source paths")
+        return paths
+
+    @model_validator(mode="after")
+    def validate_patchable_boundaries(self) -> Self:
+        allowed = tuple(PurePosixPath(path) for path in self.allowed_source_paths)
+        for value in self.patchable_source_paths:
+            candidate = PurePosixPath(value)
+            if not any(candidate == root or candidate.is_relative_to(root) for root in allowed):
+                raise ValueError("patchable source paths must be within allowed source paths")
+        return self
 
 
 class HiddenTestSpec(StrictFrozenModel):
@@ -140,9 +174,7 @@ class HiddenTestSpec(StrictFrozenModel):
 
     @field_validator("commands")
     @classmethod
-    def validate_commands(
-        cls, commands: dict[str, ApprovedCommand]
-    ) -> dict[str, ApprovedCommand]:
+    def validate_commands(cls, commands: dict[str, ApprovedCommand]) -> dict[str, ApprovedCommand]:
         return _validate_command_mapping(commands)
 
 

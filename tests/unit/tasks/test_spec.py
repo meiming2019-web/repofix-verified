@@ -98,6 +98,49 @@ def test_valid_agent_task_spec() -> None:
     assert task.task_id == "task-001"
     assert task.approved_commands["unit_tests"].argv == ("pytest", "-q")
     assert task.allowed_source_paths == ("src/repofix", "tests/unit")
+    assert task.patchable_source_paths == ()
+
+
+def test_patchable_source_paths_are_explicit_and_contained() -> None:
+    data = valid_task_data()
+    data["patchable_source_paths"] = ["src/repofix"]
+    assert AgentTaskSpec.model_validate(data).patchable_source_paths == ("src/repofix",)
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [["/src"], ["src/../tests"], [r"src\pkg"], ["src", "src"], ["outside"]],
+)
+def test_invalid_patchable_source_paths_are_rejected(paths: list[str]) -> None:
+    data = valid_task_data()
+    data["patchable_source_paths"] = paths
+    with pytest.raises(ValidationError):
+        AgentTaskSpec.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/evil\nname",
+        "src/evil\rname",
+        "src/evil\tname",
+        "src/evil\x1bname",
+        "src/evil\u2028name",
+        "src/evil\u2029name",
+    ],
+)
+def test_source_paths_reject_control_characters(path: str) -> None:
+    data = valid_task_data()
+    data["patchable_source_paths"] = [path]
+    with pytest.raises(ValidationError, match="control"):
+        AgentTaskSpec.model_validate(data)
+
+
+def test_ordinary_unicode_source_path_is_allowed() -> None:
+    data = valid_task_data()
+    data["allowed_source_paths"] = ["src/组件"]
+    data["patchable_source_paths"] = ["src/组件"]
+    assert AgentTaskSpec.model_validate(data).patchable_source_paths == ("src/组件",)
 
 
 def test_agent_task_accepts_yaml_style_nested_data() -> None:

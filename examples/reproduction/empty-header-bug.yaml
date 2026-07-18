@@ -16,6 +16,8 @@ task:
   allowed_source_paths:
     - src
     - tests
+  patchable_source_paths:
+    - src
   timeout_seconds: 300
 reproduction:
   command_id: unit_tests

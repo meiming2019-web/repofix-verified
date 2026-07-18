@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
 
 MAX_REPRODUCTION_FRAGMENT_LENGTH = 4_096
 _FRAGMENT_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ReproductionOutputStream(StrEnum):
@@ -106,6 +109,47 @@ class ReproductionExpectation(StrictFrozenModel):
         return self
 
 
+def compute_reproduction_expectation_fingerprint(
+    expectation: ReproductionExpectation,
+) -> str:
+    """Hash the complete evaluator expectation using canonical JSON."""
+
+    def fragment_data(fragment: ReproductionOutputFragment) -> dict[str, str]:
+        return {
+            "fragment_id": fragment.fragment_id,
+            "stream": fragment.stream.value,
+            "text": fragment.text,
+        }
+
+    canonical = json.dumps(
+        {
+            "command_id": expectation.command_id,
+            "expected_exit_codes": sorted(expectation.expected_exit_codes),
+            "forbidden_fragments": [
+                fragment_data(fragment)
+                for fragment in sorted(
+                    expectation.forbidden_fragments,
+                    key=lambda item: item.fragment_id,
+                )
+            ],
+            "required_fragments": [
+                fragment_data(fragment)
+                for fragment in sorted(
+                    expectation.required_fragments,
+                    key=lambda item: item.fragment_id,
+                )
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if not _SHA256_PATTERN.fullmatch(fingerprint):  # pragma: no cover - hashlib contract
+        raise AssertionError("unexpected reproduction expectation fingerprint shape")
+    return fingerprint
+
+
 class ReproductionTaskBundle(StrictFrozenModel):
     """Agent task plus evaluator-only reproduction expectations."""
 
@@ -159,9 +203,7 @@ class ReproductionEvidence(StrictFrozenModel):
         return self
 
     @classmethod
-    def from_execution_result(
-        cls, result: ApprovedCommandExecutionResult
-    ) -> ReproductionEvidence:
+    def from_execution_result(cls, result: ApprovedCommandExecutionResult) -> ReproductionEvidence:
         """Copy deterministic public evidence from one execution result."""
         from repofix.execution import ApprovedCommandExecutionResult
 
@@ -170,9 +212,7 @@ class ReproductionEvidence(StrictFrozenModel):
         return cls(
             command_id=result.command_id,
             argv=result.argv,
-            termination_reason=ReproductionTerminationReason(
-                result.termination_reason.value
-            ),
+            termination_reason=ReproductionTerminationReason(result.termination_reason.value),
             exit_code=result.exit_code,
             stdout=result.stdout,
             stderr=result.stderr,
@@ -232,9 +272,7 @@ class ReproductionVerdict(StrictFrozenModel):
         )
         if any(len(values) != len(set(values)) for values in identifier_groups):
             raise ValueError("verdict fragment IDs must be unique")
-        if set(self.matched_required_fragment_ids) & set(
-            self.missing_required_fragment_ids
-        ):
+        if set(self.matched_required_fragment_ids) & set(self.missing_required_fragment_ids):
             raise ValueError("required fragment IDs cannot be both matched and missing")
         if self.status is ReproductionStatus.REPRODUCED:
             if self.exit_code in {None, 0}:

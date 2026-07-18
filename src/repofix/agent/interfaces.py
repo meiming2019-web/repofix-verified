@@ -1,5 +1,6 @@
 """Typed boundaries for models and read-only tools."""
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from repofix.agent.actions import AgentAction
@@ -9,6 +10,14 @@ from repofix.tasks import AgentTaskSpec
 
 class ToolExecutionError(RuntimeError):
     """Raised when a tool operation fails for an expected runtime reason."""
+
+
+@dataclass(frozen=True)
+class ReadFileResult:
+    """Rendered source range plus trusted full-file integrity metadata."""
+
+    output: str
+    full_file_sha256: str
 
 
 class AgentModel(Protocol):
@@ -32,4 +41,8 @@ class ReadOnlyToolGateway(Protocol):
 
     def read_file(self, path: str, start_line: int, end_line: int) -> str:
         """Return a textual source range."""
+        ...
+
+    def read_file_with_metadata(self, path: str, start_line: int, end_line: int) -> ReadFileResult:
+        """Return a source range and a system-computed full-file hash."""
         ...

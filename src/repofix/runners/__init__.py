@@ -10,6 +10,7 @@ from repofix.runners.reproduction import (
     MAX_REPRODUCTION_STEPS,
     run_reproduction_from_paths,
 )
+from repofix.runners.patch_proposal import PatchProposalModel, run_patch_proposal_from_paths
 
 __all__ = [
     "MAX_INVESTIGATION_STEPS",
@@ -17,5 +18,7 @@ __all__ = [
     "MAX_REPRODUCTION_STEPS",
     "render_investigation_report",
     "run_investigation_from_paths",
+    "run_patch_proposal_from_paths",
     "run_reproduction_from_paths",
+    "PatchProposalModel",
 ]

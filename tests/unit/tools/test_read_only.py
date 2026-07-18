@@ -1,6 +1,7 @@
 """Tests for local read-only repository tools."""
 
 from collections.abc import Iterator
+import hashlib
 from io import BytesIO
 from pathlib import Path
 
@@ -247,6 +248,17 @@ def test_reads_one_based_inclusive_lines_and_preserves_numbers(tmp_path: Path) -
     assert tools.read_file("src/app/lines.txt", 2, 3) == "2: second\n3: third"
     assert tools.read_file("src/app/lines.txt", 3, 3) == "3: third"
     assert tools.read_file("src/app/lines.txt", 4, 5) == ""
+
+
+def test_read_metadata_hashes_complete_file_not_rendered_excerpt(tmp_path: Path) -> None:
+    root = create_repository(tmp_path)
+    contents = (root / "src/app/a.py").read_bytes()
+
+    result = gateway(root).read_file_with_metadata("src/app/a.py", 2, 2)
+
+    assert result.output == "2: def target():\n"
+    assert result.full_file_sha256 == hashlib.sha256(contents).hexdigest()
+    assert result.full_file_sha256 != hashlib.sha256(result.output.encode()).hexdigest()
 
 
 def test_read_file_rejects_directory_binary_and_invalid_utf8(tmp_path: Path) -> None:

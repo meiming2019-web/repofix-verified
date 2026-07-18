@@ -136,7 +136,8 @@ def build_investigation_messages(
                 else None
             ),
             "observations": [
-                observation.model_dump(mode="json") for observation in state.observations
+                observation.model_dump(mode="json", exclude={"full_file_sha256"})
+                for observation in state.observations
             ],
             "phase": state.phase.value,
             "untrusted_reproduction_observations": [

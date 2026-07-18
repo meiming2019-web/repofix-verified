@@ -141,6 +141,7 @@ def test_fixture_runs_through_agent_requested_reproduction_stack(
     assert "matched_required_fragment_ids" not in prompts
     assert "missing_required_fragment_ids" not in prompts
     assert "forbidden_fragment_ids_found" not in prompts
+    assert "full_file_sha256" not in prompts
     assert result.state.terminal_summary is not None
     assert result.state.terminal_summary == (
         "The reported behavior was reproduced. No patch was generated or verified."

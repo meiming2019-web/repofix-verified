@@ -59,7 +59,10 @@ def _execute_tool_action(
         elif isinstance(action, SearchCodeAction):
             output = tools.search_code(action.query, action.file_glob)
         else:
-            output = tools.read_file(action.path, action.start_line, action.end_line)
+            read_result = tools.read_file_with_metadata(
+                action.path, action.start_line, action.end_line
+            )
+            output = read_result.output
     except ToolExecutionError as error:
         return ToolObservation(
             step_index=step_index,
@@ -68,6 +71,7 @@ def _execute_tool_action(
             success=False,
             output="",
             error=f"{type(error).__name__}: {error}",
+            full_file_sha256=None,
         )
     return ToolObservation(
         step_index=step_index,
@@ -76,6 +80,9 @@ def _execute_tool_action(
         success=True,
         output=output,
         error=None,
+        full_file_sha256=(
+            read_result.full_file_sha256 if isinstance(action, ReadFileAction) else None
+        ),
     )
 
 

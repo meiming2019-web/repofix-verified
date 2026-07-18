@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from functools import lru_cache
+import hashlib
 from pathlib import Path, PurePosixPath
 from typing import Never
 
-from repofix.agent import ToolExecutionError
+from repofix.agent import ReadFileResult, ToolExecutionError
 
 
 MAX_LISTING_ENTRIES = 1_000
@@ -211,6 +212,10 @@ class LocalReadOnlyToolGateway:
 
     def read_file(self, path: str, start_line: int, end_line: int) -> str:
         """Read a one-based inclusive range from an authorized UTF-8 text file."""
+        return self.read_file_with_metadata(path, start_line, end_line).output
+
+    def read_file_with_metadata(self, path: str, start_line: int, end_line: int) -> ReadFileResult:
+        """Read a source range and hash the complete bounded file contents."""
         if isinstance(start_line, bool) or not isinstance(start_line, int) or start_line <= 0:
             _fail("start line must be a strict positive integer")
         if isinstance(end_line, bool) or not isinstance(end_line, int) or end_line <= 0:
@@ -239,15 +244,19 @@ class LocalReadOnlyToolGateway:
 
         lines = text.splitlines(keepends=True)
         if start_line > len(lines):
-            return ""
-        selected = lines[start_line - 1 : end_line]
-        result = "".join(
-            f"{line_number}: {line}"
-            for line_number, line in enumerate(selected, start=start_line)
-        )
+            result = ""
+        else:
+            selected = lines[start_line - 1 : end_line]
+            result = "".join(
+                f"{line_number}: {line}"
+                for line_number, line in enumerate(selected, start=start_line)
+            )
         if len(result) > MAX_READ_OUTPUT_CHARS:
             _fail("rendered file range exceeds the read-output limit")
-        return result
+        return ReadFileResult(
+            output=result,
+            full_file_sha256=hashlib.sha256(contents).hexdigest(),
+        )
 
     def search_code(self, query: str, file_glob: str | None = None) -> str:
         """Search authorized UTF-8 text files for a literal substring.

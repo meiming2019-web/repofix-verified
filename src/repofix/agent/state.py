@@ -1,6 +1,7 @@
 """Strict public state models for read-only agent workflows."""
 
 from enum import Enum, StrEnum
+import re
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -13,6 +14,7 @@ from repofix.tasks.spec import validate_command_name
 REPRODUCED_TERMINAL_SUMMARY = (
     "The reported behavior was reproduced. No patch was generated or verified."
 )
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class AgentWorkflow(StrEnum):
@@ -103,6 +105,7 @@ class ToolObservation(_StrictFrozenModel):
     success: bool
     output: str
     error: str | None
+    full_file_sha256: str | None = None
 
     @field_validator("tool_name")
     @classmethod
@@ -117,6 +120,14 @@ class ToolObservation(_StrictFrozenModel):
             raise ValueError("successful tool observations must not contain an error")
         if not self.success and (self.error is None or not self.error.strip()):
             raise ValueError("failed tool observations must contain an error")
+        is_successful_read = self.success and self.tool_name == "read_file"
+        if is_successful_read:
+            if self.full_file_sha256 is None or not _SHA256_PATTERN.fullmatch(
+                self.full_file_sha256
+            ):
+                raise ValueError("successful read-file observations require a full-file SHA-256")
+        elif self.full_file_sha256 is not None:
+            raise ValueError("only successful read-file observations may contain a file hash")
         return self
 
 
@@ -188,6 +199,9 @@ class AgentState(_StrictFrozenModel):
 
     @model_validator(mode="after")
     def validate_phase_result(self) -> Self:
+        hypothesis_ids = [hypothesis.hypothesis_id for hypothesis in self.hypotheses]
+        if len(hypothesis_ids) != len(set(hypothesis_ids)):
+            raise ValueError("hypothesis IDs must be unique within agent state")
         nonterminal_phases = {
             AgentPhase.UNDERSTAND,
             AgentPhase.EXPLORE,

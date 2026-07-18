@@ -18,6 +18,7 @@ from repofix.reproduction import (
     ReproductionStatus,
     ReproductionTaskBundle,
     ReproductionVerdict,
+    compute_reproduction_expectation_fingerprint,
 )
 from repofix.tasks import AgentTaskSpec
 
@@ -103,6 +104,37 @@ def test_valid_expectation_accepts_yaml_lists_and_stores_tuples() -> None:
 
     assert value.expected_exit_codes == (1,)
     assert isinstance(value.required_fragments, tuple)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("expected_exit_codes", [2]),
+        (
+            "required_fragments",
+            [{"fragment_id": "target-failure", "stream": "combined", "text": "changed"}],
+        ),
+        (
+            "forbidden_fragments",
+            [{"fragment_id": "import-error", "stream": "combined", "text": "changed"}],
+        ),
+        (
+            "required_fragments",
+            [{"fragment_id": "target-failure", "stream": "stderr", "text": "target"}],
+        ),
+    ],
+)
+def test_expectation_fingerprint_binds_every_evaluator_field(field: str, value: object) -> None:
+    original = ReproductionExpectation.model_validate(expectation_data())
+    changed_data = expectation_data()
+    changed_data[field] = value
+    changed = ReproductionExpectation.model_validate(changed_data)
+
+    fingerprint = compute_reproduction_expectation_fingerprint(original)
+
+    assert len(fingerprint) == 64
+    assert fingerprint == fingerprint.lower()
+    assert compute_reproduction_expectation_fingerprint(changed) != fingerprint
 
 
 @pytest.mark.parametrize(

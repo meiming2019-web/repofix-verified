@@ -1,6 +1,7 @@
 """Tests for the deterministic read-only investigation loop."""
 
 from collections.abc import Callable
+import hashlib
 
 import pytest
 
@@ -13,6 +14,7 @@ from repofix.agent import (
     IssueUnderstanding,
     ListFilesAction,
     ReadFileAction,
+    ReadFileResult,
     RecordHypothesisAction,
     RepairHypothesis,
     SearchCodeAction,
@@ -108,6 +110,12 @@ class ScriptedTools:
         )
         return "14: def parse_header(header):\n15:     return DEFAULT"
 
+    def read_file_with_metadata(self, path: str, start_line: int, end_line: int) -> ReadFileResult:
+        return ReadFileResult(
+            output=self.read_file(path, start_line, end_line),
+            full_file_sha256=hashlib.sha256(b"complete fake source").hexdigest(),
+        )
+
 
 def test_complete_deterministic_trajectory_feeds_observations_back() -> None:
     actions: list[AgentAction] = [
@@ -138,6 +146,10 @@ def test_complete_deterministic_trajectory_feeds_observations_back() -> None:
         assert len(state.observations) == 2
         assert state.observations[-1].tool_name == "read_file"
         assert "return DEFAULT" in state.observations[-1].output
+        assert (
+            state.observations[-1].full_file_sha256
+            == hashlib.sha256(b"complete fake source").hexdigest()
+        )
 
     def hypothesis_assertion(state: AgentState) -> None:
         assert state.hypotheses == (hypothesis(),)
@@ -181,6 +193,7 @@ def test_complete_deterministic_trajectory_feeds_observations_back() -> None:
     }
     assert state.observations[0].success is True
     assert state.observations[0].error is None
+    assert state.observations[0].full_file_sha256 is None
 
 
 def test_failed_tool_call_is_observed_and_does_not_crash_loop() -> None:

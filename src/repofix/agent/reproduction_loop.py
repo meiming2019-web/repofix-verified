@@ -1,5 +1,8 @@
 """Provider-independent agent-requested reproduction workflow."""
 
+import hashlib
+import json
+import re
 from typing import Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -31,12 +34,25 @@ from repofix.reproduction import (
     ReproductionExpectation,
     ReproductionStatus,
     ReproductionVerdict,
+    compute_reproduction_expectation_fingerprint,
     verify_reproduction,
 )
 from repofix.tasks import AgentTaskSpec
 
 
 ReadOnlyToolAction = ListFilesAction | SearchCodeAction | ReadFileAction
+_FINGERPRINT_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def compute_task_fingerprint(task: AgentTaskSpec) -> str:
+    """Hash the complete agent task using deterministic canonical JSON."""
+    canonical = json.dumps(
+        task.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _validated_state_update(state: AgentState, **updates: object) -> AgentState:
@@ -77,6 +93,24 @@ class ReproductionAgentRunResult(_StrictFrozenModel):
 
     state: AgentState
     attempts: tuple[EvaluatorReproductionAttempt, ...]
+    task_fingerprint: str
+    reproduction_expectation_fingerprint: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_fingerprint_shape(cls, values: object) -> object:
+        if isinstance(values, dict):
+            for field_name, description in (
+                ("task_fingerprint", "task fingerprint"),
+                (
+                    "reproduction_expectation_fingerprint",
+                    "reproduction expectation fingerprint",
+                ),
+            ):
+                value = values.get(field_name)
+                if not isinstance(value, str) or not _FINGERPRINT_PATTERN.fullmatch(value):
+                    raise ValueError(f"{description} must be lowercase hexadecimal SHA-256")
+        return values
 
     @model_validator(mode="after")
     def validate_attempt_observations(self) -> Self:
@@ -85,10 +119,12 @@ class ReproductionAgentRunResult(_StrictFrozenModel):
         observations = self.state.reproduction_observations
         if len(self.attempts) > 1:
             raise ValueError("reproduction run results permit at most one attempt")
-        if any(
-            attempt.verdict.status is ReproductionStatus.REPRODUCED
-            for attempt in self.attempts
-        ) and self.state.phase is not AgentPhase.FINISHED:
+        if (
+            any(
+                attempt.verdict.status is ReproductionStatus.REPRODUCED for attempt in self.attempts
+            )
+            and self.state.phase is not AgentPhase.FINISHED
+        ):
             raise ValueError("reproduced attempts require finished reproduction state")
         if len(observations) != len(self.attempts):
             raise ValueError("each reproduction attempt requires one public observation")
@@ -98,8 +134,7 @@ class ReproductionAgentRunResult(_StrictFrozenModel):
                 observation.command_id != self.state.reproduction_command_id
                 or evidence.command_id != self.state.reproduction_command_id
                 or attempt.verdict.command_id != self.state.reproduction_command_id
-                or observation.termination_reason.value
-                != evidence.termination_reason.value
+                or observation.termination_reason.value != evidence.termination_reason.value
                 or observation.exit_code != evidence.exit_code
                 or observation.stdout != evidence.stdout
                 or observation.stderr != evidence.stderr
@@ -240,7 +275,14 @@ def run_reproduction_agent_loop(
                     step_count=next_step_count,
                     terminal_summary=REPRODUCED_TERMINAL_SUMMARY,
                 )
-                return ReproductionAgentRunResult(state=state, attempts=tuple(attempts))
+                return ReproductionAgentRunResult(
+                    state=state,
+                    attempts=tuple(attempts),
+                    task_fingerprint=compute_task_fingerprint(task),
+                    reproduction_expectation_fingerprint=(
+                        compute_reproduction_expectation_fingerprint(expectation)
+                    ),
+                )
             state = _validated_state_update(
                 state,
                 phase=AgentPhase.EXPLORE,
@@ -259,4 +301,11 @@ def run_reproduction_agent_loop(
         phase=AgentPhase.FAILED,
         failure_reason=f"reproduction workflow exceeded the {max_steps}-step budget",
     )
-    return ReproductionAgentRunResult(state=state, attempts=tuple(attempts))
+    return ReproductionAgentRunResult(
+        state=state,
+        attempts=tuple(attempts),
+        task_fingerprint=compute_task_fingerprint(task),
+        reproduction_expectation_fingerprint=(
+            compute_reproduction_expectation_fingerprint(expectation)
+        ),
+    )

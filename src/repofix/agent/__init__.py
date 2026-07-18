@@ -10,7 +10,12 @@ from repofix.agent.actions import (
     SearchCodeAction,
     UnderstandIssueAction,
 )
-from repofix.agent.interfaces import AgentModel, ReadOnlyToolGateway, ToolExecutionError
+from repofix.agent.interfaces import (
+    AgentModel,
+    ReadFileResult,
+    ReadOnlyToolGateway,
+    ToolExecutionError,
+)
 from repofix.agent.loop import AgentProtocolError, run_read_only_investigation
 from repofix.agent.reproduction_loop import (
     ApprovedCommandGateway,
@@ -42,6 +47,7 @@ __all__ = [
     "IssueUnderstanding",
     "ListFilesAction",
     "ReadFileAction",
+    "ReadFileResult",
     "ReadOnlyToolGateway",
     "RecordHypothesisAction",
     "ReproductionAgentRunResult",

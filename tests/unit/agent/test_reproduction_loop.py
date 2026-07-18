@@ -1,5 +1,6 @@
 """Tests for the provider-independent agent-requested reproduction loop."""
 
+import hashlib
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from repofix.agent import (
     AgentWorkflow,
     FinishInvestigationAction,
     IssueUnderstanding,
+    ReadFileResult,
     RecordHypothesisAction,
     RepairHypothesis,
     RunApprovedCommandAction,
@@ -150,6 +152,12 @@ class FakeTools:
     def read_file(self, path: str, start_line: int, end_line: int) -> str:
         return "1: def parse_target():\n2:     return WRONG"
 
+    def read_file_with_metadata(self, path: str, start_line: int, end_line: int) -> ReadFileResult:
+        return ReadFileResult(
+            output=self.read_file(path, start_line, end_line),
+            full_file_sha256=hashlib.sha256(b"complete fake source").hexdigest(),
+        )
+
 
 class FakeCommandGateway:
     def __init__(
@@ -221,10 +229,34 @@ def test_run_result_rejects_multiple_attempts_and_finished_without_attempt() -> 
 
     with pytest.raises(ValueError, match="at most one attempt"):
         result.model_validate(
-            {"state": result.state, "attempts": (attempt, attempt)}
+            {
+                "state": result.state,
+                "attempts": (attempt, attempt),
+                "task_fingerprint": result.task_fingerprint,
+                "reproduction_expectation_fingerprint": (
+                    result.reproduction_expectation_fingerprint
+                ),
+            }
+        )
+
+    with pytest.raises(ValueError, match="reproduction expectation fingerprint"):
+        result.model_validate(
+            {
+                **result.model_dump(),
+                "reproduction_expectation_fingerprint": "A" * 64,
+            }
         )
     with pytest.raises(ValueError, match="one public observation"):
-        result.model_validate({"state": result.state, "attempts": ()})
+        result.model_validate(
+            {
+                "state": result.state,
+                "attempts": (),
+                "task_fingerprint": result.task_fingerprint,
+                "reproduction_expectation_fingerprint": (
+                    result.reproduction_expectation_fingerprint
+                ),
+            }
+        )
 
 
 def test_failed_run_result_rejects_reproduced_attempt() -> None:
@@ -245,7 +277,14 @@ def test_failed_run_result_rejects_reproduced_attempt() -> None:
 
     with pytest.raises(ValueError, match="reproduced attempts require finished"):
         successful.model_validate(
-            {"state": failed_state, "attempts": successful.attempts}
+            {
+                "state": failed_state,
+                "attempts": successful.attempts,
+                "task_fingerprint": successful.task_fingerprint,
+                "reproduction_expectation_fingerprint": (
+                    successful.reproduction_expectation_fingerprint
+                ),
+            }
         )
 
 

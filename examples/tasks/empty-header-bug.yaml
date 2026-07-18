@@ -15,4 +15,6 @@ approved_commands:
 allowed_source_paths:
   - src
   - tests
+patchable_source_paths:
+  - src
 timeout_seconds: 300

@@ -5,9 +5,12 @@ from repofix.models.openai_agent import (
     ModelExecutionError,
     OpenAIResponsesAgentModel,
 )
+from repofix.models.openai_patch import OpenAIPatchProposalModel, PatchModelExecutionError
 
 __all__ = [
     "AgentDecision",
     "ModelExecutionError",
     "OpenAIResponsesAgentModel",
+    "OpenAIPatchProposalModel",
+    "PatchModelExecutionError",
 ]
