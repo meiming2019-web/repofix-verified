@@ -70,6 +70,32 @@ decoding errors, missing target signatures, and unrelated failures are `INCONCLU
 zero is `NOT_REPRODUCED`. This milestone still does not generate, apply, or verify a patch. Local
 command execution remains POSIX-only and is not a security sandbox.
 
+## Agent-requested reproduction
+
+In reproduction workflow mode, the Agent may request only the single command ID named by the
+evaluator's reproduction expectation. Other approved TaskSpec commands are not advertised and cannot
+be selected. It never supplies argv, shell text, environment, timeout, or evaluator expectations;
+RepoFix executes the exact trusted TaskSpec command and binds the returned command ID and argv to that
+request. Future multi-command reproduction requires an evaluator model that maps each command ID to
+its own expectation.
+
+The evaluator-only deterministic verifier controls classification. Complete bounded execution output
+is retained in evaluator evidence and public workflow state, but the next model request receives a
+smaller deterministic prefix projection with original byte counts and explicit truncation flags.
+After any command attempt, that command action is no longer advertised or executable; the model may
+continue read-only repository investigation after an inconclusive or not-reproduced result. After
+verified reproduction, RepoFix immediately generates the terminal conclusion without another model
+request, so command output and model-authored summaries cannot become authoritative repair or
+verification claims. Before execution, prompt context contains the one available command ID; after
+execution, that available-ID list is empty and the structured-output schema excludes both command and
+finish actions. Public workflow state and evaluator audit results permit exactly one attempt, and
+verified evidence is valid only in the canonical finished state.
+
+Expected exit codes and required or forbidden fragment rules remain evaluator-only. A `REPRODUCED`
+status means the reported behavior was observed, not that it was `FIXED`. This workflow creates no
+patch and performs no repair verification. Local command execution remains POSIX-only and is still
+not a security sandbox.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

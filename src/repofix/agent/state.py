@@ -1,9 +1,25 @@
-"""Strict state models for the read-only investigation agent."""
+"""Strict public state models for read-only agent workflows."""
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from repofix.execution import CommandTerminationReason
+from repofix.reproduction.models import ReproductionStatus
+from repofix.tasks.spec import validate_command_name
+
+
+REPRODUCED_TERMINAL_SUMMARY = (
+    "The reported behavior was reproduced. No patch was generated or verified."
+)
+
+
+class AgentWorkflow(StrEnum):
+    """Explicit mode controlling the actions available to an agent."""
+
+    INVESTIGATION = "investigation"
+    REPRODUCTION = "reproduction"
 
 
 class AgentPhase(str, Enum):
@@ -104,6 +120,50 @@ class ToolObservation(_StrictFrozenModel):
         return self
 
 
+class AgentReproductionObservation(_StrictFrozenModel):
+    """Sanitized public evidence and status from one approved command."""
+
+    command_id: str
+    termination_reason: CommandTerminationReason
+    exit_code: int | None
+    stdout: str
+    stderr: str
+    stdout_bytes: int = Field(ge=0)
+    stderr_bytes: int = Field(ge=0)
+    had_decode_errors: bool
+    status: ReproductionStatus
+
+    @field_validator("command_id")
+    @classmethod
+    def validate_command_id(cls, value: str) -> str:
+        return validate_command_name(value)
+
+    @model_validator(mode="after")
+    def validate_execution_shape(self) -> Self:
+        if self.termination_reason is CommandTerminationReason.COMPLETED:
+            if self.exit_code is None:
+                raise ValueError("completed observations require an exit code")
+        elif self.exit_code is not None:
+            raise ValueError("bounded termination observations require exit_code=None")
+        if self.status is ReproductionStatus.REPRODUCED and (
+            self.termination_reason is not CommandTerminationReason.COMPLETED
+            or self.exit_code == 0
+        ):
+            raise ValueError("reproduced observations require completed nonzero execution")
+        if self.status is ReproductionStatus.NOT_REPRODUCED and (
+            self.termination_reason is not CommandTerminationReason.COMPLETED
+            or self.exit_code != 0
+        ):
+            raise ValueError("not-reproduced observations require completed zero exit")
+        if (
+            self.termination_reason
+            in {CommandTerminationReason.TIMED_OUT, CommandTerminationReason.OUTPUT_LIMIT}
+            and self.status is not ReproductionStatus.INCONCLUSIVE
+        ):
+            raise ValueError("bounded termination observations must be inconclusive")
+        return self
+
+
 class AgentState(_StrictFrozenModel):
     """Complete public state of a read-only investigation."""
 
@@ -115,6 +175,9 @@ class AgentState(_StrictFrozenModel):
     step_count: int = Field(ge=0)
     terminal_summary: str | None
     failure_reason: str | None
+    workflow: AgentWorkflow = AgentWorkflow.INVESTIGATION
+    reproduction_command_id: str | None = None
+    reproduction_observations: tuple[AgentReproductionObservation, ...] = ()
 
     @field_validator("task_id")
     @classmethod
@@ -145,10 +208,46 @@ class AgentState(_StrictFrozenModel):
                 raise ValueError("failed states must contain a failure reason")
             if self.terminal_summary is not None:
                 raise ValueError("failed states must not contain a terminal summary")
+        if self.workflow is AgentWorkflow.INVESTIGATION:
+            if (
+                self.reproduction_command_id is not None
+                or self.reproduction_observations
+            ):
+                raise ValueError("investigation states cannot contain reproduction results")
+        elif self.reproduction_command_id is None:
+            raise ValueError("reproduction states require a configured command ID")
+        else:
+            validate_command_name(self.reproduction_command_id)
+            if len(self.reproduction_observations) > 1:
+                raise ValueError("reproduction states permit at most one observation")
+            if any(
+                observation.command_id != self.reproduction_command_id
+                for observation in self.reproduction_observations
+            ):
+                raise ValueError("reproduction observations must use the configured command ID")
+        if self.phase is not AgentPhase.FINISHED and any(
+            observation.status is ReproductionStatus.REPRODUCED
+            for observation in self.reproduction_observations
+        ):
+            raise ValueError("reproduced evidence requires a finished state")
+        if self.workflow is AgentWorkflow.REPRODUCTION and self.phase is AgentPhase.FINISHED:
+            if (
+                len(self.reproduction_observations) != 1
+                or self.reproduction_observations[-1].status
+                is not ReproductionStatus.REPRODUCED
+            ):
+                raise ValueError("finished reproduction states require exactly one reproduced observation")
+            if self.terminal_summary != REPRODUCED_TERMINAL_SUMMARY:
+                raise ValueError("finished reproduction states require the canonical summary")
         return self
 
     @classmethod
-    def initial(cls, task_id: str) -> Self:
+    def initial(
+        cls,
+        task_id: str,
+        workflow: AgentWorkflow = AgentWorkflow.INVESTIGATION,
+        reproduction_command_id: str | None = None,
+    ) -> Self:
         """Create the initial state for a task investigation."""
         return cls(
             task_id=task_id,
@@ -159,4 +258,7 @@ class AgentState(_StrictFrozenModel):
             step_count=0,
             terminal_summary=None,
             failure_reason=None,
+            workflow=workflow,
+            reproduction_command_id=reproduction_command_id,
+            reproduction_observations=(),
         )

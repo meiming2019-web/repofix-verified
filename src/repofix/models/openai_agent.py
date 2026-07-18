@@ -15,9 +15,14 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from openai.types.responses import ResponseInputParam
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from repofix.agent.actions import AgentAction
+from repofix.agent.actions import (
+    AgentAction,
+    InvestigationAgentAction,
+    ReproductionPostAttemptAgentAction,
+    ReproductionPreAttemptAgentAction,
+)
 from repofix.agent.prompts import build_investigation_messages
-from repofix.agent.state import AgentState
+from repofix.agent.state import AgentState, AgentWorkflow
 from repofix.tasks import AgentTaskSpec
 
 
@@ -35,9 +40,7 @@ def _use_openai_compatible_action_union(schema: dict[str, Any]) -> None:
     action_schema.pop("discriminator")
 
 
-class AgentDecision(BaseModel):
-    """Strict structured-output envelope for one public agent action."""
-
+class _AgentDecision(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
@@ -45,7 +48,26 @@ class AgentDecision(BaseModel):
         json_schema_extra=_use_openai_compatible_action_union,
     )
 
-    action: AgentAction
+
+class InvestigationAgentDecision(_AgentDecision):
+    """Strict structured-output envelope for an investigation action."""
+
+    action: InvestigationAgentAction
+
+
+class ReproductionPreAttemptDecision(_AgentDecision):
+    """Strict envelope for reproduction actions before command execution."""
+
+    action: ReproductionPreAttemptAgentAction
+
+
+class ReproductionPostAttemptDecision(_AgentDecision):
+    """Strict envelope for reproduction actions after command execution."""
+
+    action: ReproductionPostAttemptAgentAction
+
+
+AgentDecision = InvestigationAgentDecision
 
 
 class ModelExecutionError(RuntimeError):
@@ -68,11 +90,18 @@ class OpenAIResponsesAgentModel:
     def next_action(self, *, task: AgentTaskSpec, state: AgentState) -> AgentAction:
         """Build fresh state-derived messages and request one structured action."""
         messages = build_investigation_messages(task=task, state=state)
+        decision_type: type[_AgentDecision]
+        if state.workflow is AgentWorkflow.INVESTIGATION:
+            decision_type = InvestigationAgentDecision
+        elif state.reproduction_observations:
+            decision_type = ReproductionPostAttemptDecision
+        else:
+            decision_type = ReproductionPreAttemptDecision
         try:
             response = self._client.responses.parse(
                 model=self._model,
                 input=cast(ResponseInputParam, messages),
-                text_format=AgentDecision,
+                text_format=decision_type,
                 store=False,
                 max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
             )
@@ -86,6 +115,6 @@ class OpenAIResponsesAgentModel:
         decision = response.output_parsed
         if decision is None:
             raise ModelExecutionError("OpenAI model returned no valid structured decision")
-        if not isinstance(decision, AgentDecision):
+        if not isinstance(decision, decision_type):
             raise ModelExecutionError("OpenAI model returned an unexpected parsed result")
         return decision.action

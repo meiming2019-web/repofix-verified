@@ -5,6 +5,7 @@ from typing import Annotated, Literal, Self, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from repofix.agent.state import IssueUnderstanding, RepairHypothesis
+from repofix.tasks.spec import validate_command_name
 
 
 class _ActionModel(BaseModel):
@@ -76,6 +77,18 @@ class RecordHypothesisAction(_ActionModel):
     hypothesis: RepairHypothesis
 
 
+class RunApprovedCommandAction(_ActionModel):
+    """Request one trusted TaskSpec command by its exact identifier."""
+
+    kind: Literal["run_approved_command"] = "run_approved_command"
+    command_id: str
+
+    @field_validator("command_id")
+    @classmethod
+    def validate_command_id(cls, value: str) -> str:
+        return validate_command_name(value)
+
+
 class FinishInvestigationAction(_ActionModel):
     """End the investigation without claiming the repair is resolved."""
 
@@ -90,12 +103,42 @@ class FinishInvestigationAction(_ActionModel):
         return value
 
 
+InvestigationAgentAction: TypeAlias = Annotated[
+    UnderstandIssueAction
+    | ListFilesAction
+    | SearchCodeAction
+    | ReadFileAction
+    | RecordHypothesisAction
+    | FinishInvestigationAction,
+    Field(discriminator="kind"),
+]
+
+ReproductionPreAttemptAgentAction: TypeAlias = Annotated[
+    UnderstandIssueAction
+    | ListFilesAction
+    | SearchCodeAction
+    | ReadFileAction
+    | RecordHypothesisAction
+    | RunApprovedCommandAction,
+    Field(discriminator="kind"),
+]
+
+ReproductionPostAttemptAgentAction: TypeAlias = Annotated[
+    UnderstandIssueAction
+    | ListFilesAction
+    | SearchCodeAction
+    | ReadFileAction
+    | RecordHypothesisAction,
+    Field(discriminator="kind"),
+]
+
 AgentAction: TypeAlias = Annotated[
     UnderstandIssueAction
     | ListFilesAction
     | SearchCodeAction
     | ReadFileAction
     | RecordHypothesisAction
+    | RunApprovedCommandAction
     | FinishInvestigationAction,
     Field(discriminator="kind"),
 ]
