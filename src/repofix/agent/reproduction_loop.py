@@ -152,6 +152,17 @@ class ReproductionAgentRunResult(_StrictFrozenModel):
         return self
 
 
+def compute_reproduction_run_fingerprint(result: ReproductionAgentRunResult) -> str:
+    """Hash one complete reproduction run using deterministic canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def _public_observation(
     result: ApprovedCommandExecutionResult, verdict: ReproductionVerdict
 ) -> AgentReproductionObservation:

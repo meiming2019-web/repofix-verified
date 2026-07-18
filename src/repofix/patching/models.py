@@ -141,14 +141,16 @@ class ValidatedPatchFileSnapshot(StrictFrozenModel):
 
     path: str
     original_file_sha256: str
+    candidate_file_sha256: str
     size_bytes: int = Field(ge=0)
+    candidate_size_bytes: int = Field(ge=0)
 
     @field_validator("path")
     @classmethod
     def validate_path(cls, value: str) -> str:
         return validate_relative_source_path(value, description="validated snapshot path")
 
-    @field_validator("original_file_sha256")
+    @field_validator("original_file_sha256", "candidate_file_sha256")
     @classmethod
     def validate_hash(cls, value: str) -> str:
         if not _SHA256_PATTERN.fullmatch(value):
@@ -169,6 +171,7 @@ class ValidatedPatchProposal(StrictFrozenModel):
     task_id: str
     task_fingerprint: str
     reproduction_expectation_fingerprint: str
+    reproduction_run_fingerprint: str
     hypothesis_id: str
     model_summary: str = Field(min_length=1, max_length=MAX_PATCH_SUMMARY_CHARS)
     validation_status: PatchProposalValidationStatus
@@ -184,6 +187,7 @@ class ValidatedPatchProposal(StrictFrozenModel):
         "proposal_digest",
         "task_fingerprint",
         "reproduction_expectation_fingerprint",
+        "reproduction_run_fingerprint",
     )
     @classmethod
     def validate_digest(cls, value: str) -> str:
@@ -256,6 +260,7 @@ class ValidatedPatchProposal(StrictFrozenModel):
             task_id=self.task_id,
             task_fingerprint=self.task_fingerprint,
             reproduction_expectation_fingerprint=(self.reproduction_expectation_fingerprint),
+            reproduction_run_fingerprint=self.reproduction_run_fingerprint,
             hypothesis_id=self.hypothesis_id,
             model_summary=self.model_summary,
             validation_status=self.validation_status,
@@ -274,6 +279,7 @@ def compute_proposal_digest(
     task_id: str,
     task_fingerprint: str,
     reproduction_expectation_fingerprint: str,
+    reproduction_run_fingerprint: str,
     hypothesis_id: str,
     model_summary: str,
     validation_status: PatchProposalValidationStatus,
@@ -292,6 +298,7 @@ def compute_proposal_digest(
             "task_id": task_id,
             "task_fingerprint": task_fingerprint,
             "reproduction_expectation_fingerprint": (reproduction_expectation_fingerprint),
+            "reproduction_run_fingerprint": reproduction_run_fingerprint,
             "unified_diff": unified_diff,
             "validation_status": validation_status.value,
             "validation_summary": validation_summary,
@@ -301,3 +308,74 @@ def compute_proposal_digest(
         sort_keys=True,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+class PatchApplicationStatus(StrEnum):
+    APPLIED = "applied"
+
+
+PATCH_APPLICATION_SUMMARY = (
+    "The validated patch proposal was applied to the controlled workspace. "
+    "No verification tests have run."
+)
+
+
+class AppliedPatchFile(StrictFrozenModel):
+    path: str
+    original_file_sha256: str
+    candidate_file_sha256: str
+    original_size_bytes: int = Field(ge=0)
+    candidate_size_bytes: int = Field(ge=0)
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_relative_source_path(value, description="applied patch path")
+
+    @field_validator("original_file_sha256", "candidate_file_sha256")
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("applied file hashes must be lowercase hexadecimal SHA-256")
+        return value
+
+
+class PatchApplicationResult(StrictFrozenModel):
+    task_id: str
+    task_fingerprint: str
+    reproduction_expectation_fingerprint: str
+    reproduction_run_fingerprint: str
+    proposal_digest: str
+    status: PatchApplicationStatus
+    files: tuple[AppliedPatchFile, ...] = Field(min_length=1, max_length=MAX_PATCH_FILES)
+    application_summary: str
+
+    @field_validator(
+        "task_fingerprint",
+        "reproduction_expectation_fingerprint",
+        "reproduction_run_fingerprint",
+        "proposal_digest",
+    )
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("application hashes must be lowercase hexadecimal SHA-256")
+        return value
+
+    @field_validator("files", mode="before")
+    @classmethod
+    def normalize_files(cls, value: object) -> tuple[object, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("applied files must be a list or tuple")
+        return tuple(value)
+
+    @model_validator(mode="after")
+    def validate_canonical_result(self) -> Self:
+        paths = tuple(item.path for item in self.files)
+        if not paths or paths != tuple(sorted(paths)) or len(paths) != len(set(paths)):
+            raise ValueError("applied files must be nonempty, sorted, and unique")
+        if self.status is not PatchApplicationStatus.APPLIED:
+            raise ValueError("patch application results require applied status")
+        if self.application_summary != PATCH_APPLICATION_SUMMARY:
+            raise ValueError("patch application results require the canonical summary")
+        return self

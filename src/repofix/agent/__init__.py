@@ -21,6 +21,7 @@ from repofix.agent.reproduction_loop import (
     ApprovedCommandGateway,
     EvaluatorReproductionAttempt,
     ReproductionAgentRunResult,
+    compute_reproduction_run_fingerprint,
     run_reproduction_agent_loop,
 )
 from repofix.agent.state import (
@@ -57,6 +58,7 @@ __all__ = [
     "ToolObservation",
     "ToolExecutionError",
     "UnderstandIssueAction",
+    "compute_reproduction_run_fingerprint",
     "run_read_only_investigation",
     "run_reproduction_agent_loop",
 ]

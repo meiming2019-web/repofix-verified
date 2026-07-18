@@ -9,7 +9,11 @@ from pathlib import Path, PurePosixPath
 from typing import Never
 
 from repofix.agent import AgentPhase
-from repofix.agent.reproduction_loop import ReproductionAgentRunResult, compute_task_fingerprint
+from repofix.agent.reproduction_loop import (
+    ReproductionAgentRunResult,
+    compute_reproduction_run_fingerprint,
+    compute_task_fingerprint,
+)
 from repofix.patching.models import (
     MAX_PATCH_DIFF_CHARS,
     MAX_REPLACEMENT_CHARS,
@@ -220,6 +224,28 @@ def _normalize_replacement(value: str, line_ending: str) -> str:
     return normalized.replace("\n", line_ending)
 
 
+def reconstruct_candidate_bytes(
+    *, original_bytes: bytes, edits: tuple[ValidatedPatchEdit, ...]
+) -> bytes:
+    """Apply validated one-based line edits with the proposal validator's semantics."""
+    if b"\0" in original_bytes:
+        _fail("patch edit target is binary")
+    try:
+        original_text = original_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        _fail("patch edit target is not valid UTF-8", error)
+    lines = original_text.splitlines(keepends=True)
+    candidate = lines[:]
+    for edit in reversed(edits):
+        if edit.end_line > len(lines):
+            _fail("patch edit line range is outside the current file")
+        current = "".join(lines[edit.start_line - 1 : edit.end_line])
+        if current != edit.original_text:
+            _fail("validated patch source text does not match the current file")
+        candidate[edit.start_line - 1 : edit.end_line] = [edit.replacement_text]
+    return "".join(candidate).encode("utf-8")
+
+
 def _render_unified_diff(*, path: str, original: str, candidate: str) -> str:
     """Render an applicable standard diff while retaining source terminators."""
     items = difflib.unified_diff(
@@ -359,14 +385,6 @@ def validate_patch_proposal(
         if snapshot.sha256 != recorded_hash:
             _fail("patch edit target changed after the reproduction read")
         snapshots.append(snapshot)
-        file_snapshots.append(
-            ValidatedPatchFileSnapshot(
-                path=path_value,
-                original_file_sha256=snapshot.sha256,
-                size_bytes=snapshot.size,
-            )
-        )
-
         contents = snapshot.contents
         if b"\0" in contents:
             _fail("patch edit target is binary")
@@ -378,7 +396,7 @@ def validate_patch_proposal(
         lines = text.splitlines(keepends=True)
         edits = sorted(grouped[path_value], key=lambda item: (item.start_line, item.end_line))
         prior_end = 0
-        effective: list[tuple[PatchEditDraft, str]] = []
+        file_validated: list[ValidatedPatchEdit] = []
         for edit in edits:
             if edit.start_line <= prior_end:
                 _fail("patch edits overlap within one file")
@@ -397,22 +415,22 @@ def validate_patch_proposal(
             if original == replacement:
                 _fail("patch edit replacement is unchanged")
             total_original_lines += edit.end_line - edit.start_line + 1
-            validated.append(
-                ValidatedPatchEdit(
-                    path=path_value,
-                    start_line=edit.start_line,
-                    end_line=edit.end_line,
-                    original_text=original,
-                    replacement_text=replacement,
-                    original_file_sha256=snapshot.sha256,
-                )
+            validated_edit = ValidatedPatchEdit(
+                path=path_value,
+                start_line=edit.start_line,
+                end_line=edit.end_line,
+                original_text=original,
+                replacement_text=replacement,
+                original_file_sha256=snapshot.sha256,
             )
-            effective.append((edit, replacement))
+            validated.append(validated_edit)
+            file_validated.append(validated_edit)
 
-        candidate = lines[:]
-        for edit, replacement in reversed(effective):
-            candidate[edit.start_line - 1 : edit.end_line] = [replacement]
-        candidate_text = "".join(candidate)
+        candidate_bytes = reconstruct_candidate_bytes(
+            original_bytes=contents,
+            edits=tuple(file_validated),
+        )
+        candidate_text = candidate_bytes.decode("utf-8")
         if candidate_text == "":
             _fail("patch proposals must not empty an entire file")
         if text.endswith(line_ending) != candidate_text.endswith(line_ending):
@@ -425,6 +443,15 @@ def validate_patch_proposal(
         if not rendered_diff:
             _fail("accepted patch changes must produce a nonempty diff")
         diffs.append(rendered_diff)
+        file_snapshots.append(
+            ValidatedPatchFileSnapshot(
+                path=path_value,
+                original_file_sha256=snapshot.sha256,
+                candidate_file_sha256=hashlib.sha256(candidate_bytes).hexdigest(),
+                size_bytes=snapshot.size,
+                candidate_size_bytes=len(candidate_bytes),
+            )
+        )
 
     if total_original_lines > MAX_PATCH_ORIGINAL_LINES:
         _fail("patch proposal exceeds the changed-line limit")
@@ -436,12 +463,14 @@ def validate_patch_proposal(
     )
     file_snapshots_tuple = tuple(sorted(file_snapshots, key=lambda item: item.path))
     status = PatchProposalValidationStatus.STRUCTURALLY_VALIDATED_UNAPPLIED
+    reproduction_run_fingerprint = compute_reproduction_run_fingerprint(reproduction_result)
     proposal_digest = compute_proposal_digest(
         task_id=task.task_id,
         task_fingerprint=reproduction_result.task_fingerprint,
         reproduction_expectation_fingerprint=(
             reproduction_result.reproduction_expectation_fingerprint
         ),
+        reproduction_run_fingerprint=reproduction_run_fingerprint,
         hypothesis_id=draft.hypothesis_id,
         model_summary=draft.model_summary,
         validation_status=status,
@@ -456,6 +485,7 @@ def validate_patch_proposal(
         reproduction_expectation_fingerprint=(
             reproduction_result.reproduction_expectation_fingerprint
         ),
+        reproduction_run_fingerprint=reproduction_run_fingerprint,
         hypothesis_id=draft.hypothesis_id,
         model_summary=draft.model_summary,
         validation_status=status,

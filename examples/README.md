@@ -159,6 +159,25 @@ is applied, no post-patch tests are run, and no hidden verification occurs. A va
 proof of correctness or a successful repair. Repository command execution remains POSIX-only and is
 not a security sandbox.
 
+## Controlled patch application
+
+The application milestone accepts only an existing `ValidatedPatchProposal`; it does not call a model
+or trust the proposal's unified-diff preview as write input. RepoFix reloads the trusted reproduction
+bundle, checks the task, expectation, reproduction-run, and proposal bindings, and revalidates every
+target path and original source hash immediately before writing. Candidate bytes are reconstructed from
+the validated structured line edits and must match the proposal's candidate hash and size exactly.
+
+All targets complete preflight before any target changes. RepoFix writes complete candidates to sibling
+temporary files with the original permission modes, then uses atomic replacement in deterministic path
+order. For a bounded multi-file proposal, a later replacement failure triggers best-effort rollback of
+files already replaced and removal of temporary files. This is intentionally not a persistent transaction
+or crash-recovery system.
+
+Application assumes a locally controlled, single-process POSIX workspace and is not an OS security
+sandbox. It does not run reproduction, regression, or hidden tests and does not prove that the patch is
+correct or the bug is fixed. The next milestone performs independent post-patch reproduction
+verification.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

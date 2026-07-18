@@ -1,5 +1,9 @@
 """Controlled, unapplied patch proposal APIs."""
 
+from repofix.patching.application import (
+    PatchApplicationError,
+    apply_validated_patch_proposal,
+)
 from repofix.patching.context import (
     PatchContextFileObservation,
     PatchProposalContext,
@@ -7,7 +11,11 @@ from repofix.patching.context import (
     build_patch_proposal_context,
 )
 from repofix.patching.models import (
+    PATCH_APPLICATION_SUMMARY,
     PATCH_VALIDATION_SUMMARY,
+    AppliedPatchFile,
+    PatchApplicationResult,
+    PatchApplicationStatus,
     PatchEditDraft,
     PatchProposalDraft,
     PatchProposalValidationStatus,
@@ -23,9 +31,14 @@ from repofix.patching.validator import (
 )
 
 __all__ = [
+    "AppliedPatchFile",
+    "PATCH_APPLICATION_SUMMARY",
     "PatchContextFileObservation",
     "PATCH_VALIDATION_SUMMARY",
     "PatchEditDraft",
+    "PatchApplicationError",
+    "PatchApplicationResult",
+    "PatchApplicationStatus",
     "PatchProposalContext",
     "PatchProposalContextError",
     "PatchProposalDraft",
@@ -34,6 +47,7 @@ __all__ = [
     "ValidatedPatchEdit",
     "ValidatedPatchFileSnapshot",
     "ValidatedPatchProposal",
+    "apply_validated_patch_proposal",
     "build_patch_proposal_context",
     "compute_proposal_digest",
     "validate_patch_proposal",
