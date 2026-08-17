@@ -12,6 +12,7 @@ from repofix.tasks.spec import (
     EvaluatorTaskBundle,
     GoldPatchSpec,
     HiddenTestSpec,
+    RegressionSpecification,
 )
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "EvaluatorTaskBundle",
     "GoldPatchSpec",
     "HiddenTestSpec",
+    "RegressionSpecification",
     "TaskSpecLoadError",
     "load_agent_task_spec",
     "load_evaluator_task_bundle",

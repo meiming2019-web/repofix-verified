@@ -48,10 +48,17 @@ def test_fixture_approved_command_captures_raw_failing_test_evidence(
 
     assert result.termination_reason is CommandTerminationReason.COMPLETED
     assert result.exit_code == 1
-    assert result.argv == ("pytest", "-q", "-p", "no:cacheprovider")
+    assert result.argv == (
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_header_parser.py::test_empty_header_retains_configured_value",
+    )
     output = f"{result.stdout}\n{result.stderr}"
     assert "test_empty_header_retains_configured_value" in output
-    assert "1 failed, 1 passed" in output
+    assert "1 failed" in output
+    assert "1 passed" not in output
     assert "ERROR collecting" not in output
     assert "ModuleNotFoundError" not in output
     assert "patch was applied" not in output

@@ -35,6 +35,8 @@ reproduction:
     - fragment_id: target
       stream: combined
       text: TARGET FAILURE
+regression:
+  command_id: unit_tests
 """
 
 

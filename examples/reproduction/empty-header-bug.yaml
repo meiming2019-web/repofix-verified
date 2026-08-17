@@ -13,6 +13,14 @@ task:
         - -q
         - -p
         - no:cacheprovider
+        - tests/test_header_parser.py::test_empty_header_retains_configured_value
+    regression_tests:
+      argv:
+        - pytest
+        - -q
+        - -p
+        - no:cacheprovider
+        - tests/test_header_parser.py::test_nonempty_header_is_returned
   allowed_source_paths:
     - src
     - tests
@@ -32,7 +40,7 @@ reproduction:
       text: "assert 'default' == 'configured'"
     - fragment_id: expected-test-count
       stream: combined
-      text: 1 failed, 1 passed
+      text: 1 failed
   forbidden_fragments:
     - fragment_id: module-import-error
       stream: combined
@@ -40,3 +48,5 @@ reproduction:
     - fragment_id: pytest-collection-error
       stream: combined
       text: ERROR collecting
+regression:
+  command_id: regression_tests

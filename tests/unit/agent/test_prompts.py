@@ -364,6 +364,8 @@ reproduction:
     - fragment_id: forbidden-sentinel-id
       stream: combined
       text: FORBIDDEN_SENTINEL_TEXT
+regression:
+  command_id: unit_tests
 """,
         encoding="utf-8",
     )

@@ -29,6 +29,7 @@ _POST_PATCH_EXPORTS = {
     "PostPatchReproductionResult",
     "PostPatchReproductionStatus",
     "verify_post_patch_reproduction",
+    "compute_post_patch_reproduction_fingerprint",
 }
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
         PostPatchReproductionResult,
         PostPatchReproductionStatus,
         verify_post_patch_reproduction,
+        compute_post_patch_reproduction_fingerprint,
     )
 
 
@@ -69,6 +71,7 @@ __all__ = [
     "ReproductionTerminationReason",
     "ReproductionVerdict",
     "compute_reproduction_expectation_fingerprint",
+    "compute_post_patch_reproduction_fingerprint",
     "ReproductionVerificationError",
     "verify_reproduction",
     "verify_post_patch_reproduction",

@@ -20,7 +20,7 @@ from repofix.reproduction import (
     ReproductionVerdict,
     compute_reproduction_expectation_fingerprint,
 )
-from repofix.tasks import AgentTaskSpec
+from repofix.tasks import AgentTaskSpec, RegressionSpecification
 
 
 def task_data() -> dict[str, Any]:
@@ -182,6 +182,18 @@ def test_bundle_requires_an_exact_approved_command_id() -> None:
         ReproductionTaskBundle(
             task=task,
             reproduction=ReproductionExpectation.model_validate(data),
+            regression=RegressionSpecification(command_id="unit_tests"),
+        )
+
+
+def test_bundle_requires_an_approved_regression_command() -> None:
+    task = AgentTaskSpec.model_validate(task_data())
+
+    with pytest.raises(ValidationError, match="regression command ID"):
+        ReproductionTaskBundle(
+            task=task,
+            reproduction=ReproductionExpectation.model_validate(expectation_data()),
+            regression=RegressionSpecification(command_id="other_tests"),
         )
 
 
@@ -190,6 +202,7 @@ def test_bundle_agent_view_excludes_reproduction_data() -> None:
     bundle = ReproductionTaskBundle(
         task=task,
         reproduction=ReproductionExpectation.model_validate(expectation_data()),
+        regression=RegressionSpecification(command_id="unit_tests"),
     )
 
     agent_view = bundle.agent_view()

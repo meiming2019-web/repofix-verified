@@ -91,6 +91,8 @@ reproduction:
     - fragment_id: sentinel-import-error
       stream: combined
       text: SENTINEL forbidden import text
+regression:
+  command_id: unit_tests
 """
 
 
@@ -154,6 +156,7 @@ def test_loads_valid_reproduction_bundle(tmp_path: Path) -> None:
     assert type(bundle) is ReproductionTaskBundle
     assert bundle.reproduction.command_id == "unit_tests"
     assert bundle.reproduction.expected_exit_codes == (1,)
+    assert bundle.regression.command_id == "unit_tests"
 
 
 def test_reproduction_bundle_agent_loader_preserves_boundary(tmp_path: Path) -> None:

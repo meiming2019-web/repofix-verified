@@ -379,3 +379,16 @@ class PatchApplicationResult(StrictFrozenModel):
         if self.application_summary != PATCH_APPLICATION_SUMMARY:
             raise ValueError("patch application results require the canonical summary")
         return self
+
+
+def compute_patch_application_result_fingerprint(
+    result: PatchApplicationResult,
+) -> str:
+    """Hash the complete controlled-application result using canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

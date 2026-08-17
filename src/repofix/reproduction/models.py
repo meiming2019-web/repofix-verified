@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import Field, field_validator, model_validator
 
-from repofix.tasks.spec import AgentTaskSpec, StrictFrozenModel, validate_command_name
+from repofix.tasks.spec import (
+    AgentTaskSpec,
+    RegressionSpecification,
+    StrictFrozenModel,
+    validate_command_name,
+)
 
 if TYPE_CHECKING:
     from repofix.execution import ApprovedCommandExecutionResult
@@ -155,11 +160,14 @@ class ReproductionTaskBundle(StrictFrozenModel):
 
     task: AgentTaskSpec
     reproduction: ReproductionExpectation
+    regression: RegressionSpecification
 
     @model_validator(mode="after")
     def validate_command_reference(self) -> Self:
         if self.reproduction.command_id not in self.task.approved_commands:
             raise ValueError("reproduction command ID is not an approved task command")
+        if self.regression.command_id not in self.task.approved_commands:
+            raise ValueError("regression command ID is not an approved task command")
         return self
 
     def agent_view(self) -> AgentTaskSpec:

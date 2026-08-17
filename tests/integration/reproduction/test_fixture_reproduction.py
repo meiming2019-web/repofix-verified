@@ -69,7 +69,8 @@ def test_checked_in_fixture_is_reproduced_without_model_or_repository_mutation(
     assert verdict.missing_required_fragment_ids == ()
     assert verdict.forbidden_fragment_ids_found == ()
     output = f"{execution_result.stdout}\n{execution_result.stderr}"
-    assert "1 failed, 1 passed" in output
+    assert "1 failed" in output
+    assert "1 passed" not in output
     assert "ModuleNotFoundError" not in output
     assert "ERROR collecting" not in output
     assert fake_key not in output

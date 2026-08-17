@@ -75,6 +75,17 @@ class ApprovedCommand(StrictFrozenModel):
         return argv
 
 
+class RegressionSpecification(StrictFrozenModel):
+    """Evaluator-controlled selection of the single MVP regression command."""
+
+    command_id: str
+
+    @field_validator("command_id")
+    @classmethod
+    def validate_command_id(cls, value: str) -> str:
+        return validate_command_name(value)
+
+
 class AgentTaskSpec(StrictFrozenModel):
     """Task information that may be exposed to the repair agent."""
 

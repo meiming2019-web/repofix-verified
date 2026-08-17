@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
@@ -118,6 +120,19 @@ class PostPatchReproductionResult(StrictFrozenModel):
         if self.verification_summary != _SUMMARY_BY_STATUS[self.status]:
             raise ValueError("post-patch result requires its canonical system summary")
         return self
+
+
+def compute_post_patch_reproduction_fingerprint(
+    result: PostPatchReproductionResult,
+) -> str:
+    """Hash the complete post-patch reproduction result using canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _fail(message: str, cause: BaseException | None = None) -> Never:

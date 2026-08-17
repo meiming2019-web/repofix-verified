@@ -194,6 +194,27 @@ command and checked again afterward so unexpected command-time source mutation i
 Command execution remains bounded and POSIX-only. It uses the prepared local workspace with the user's
 operating-system permissions and is not an OS security sandbox.
 
+## Regression baseline and verification
+
+The evaluator configures one public regression command. RepoFix executes it once on the unapplied
+workspace, after proposal validation, to establish a real system-owned baseline. Only a passing
+baseline supports a post-patch comparison. After controlled application, the original reproduction
+must first reach `original_behavior_not_reproduced`; RepoFix then executes the same regression command
+once more. No model participates in baseline or regression classification, and neither command is
+retried.
+
+`regression_command_passed` means only that this configured command passed both before and after the
+patch. `regression_command_failed` means only that it passed before the patch and failed afterward;
+it does not by itself prove that the patch caused a regression. Timeouts, output limits, and decoding
+errors are inconclusive. These results are not a complete regression-free or repair-success verdict,
+and hidden verification has not run.
+
+Proposal target files are checked against the proposal before the baseline command and against the
+applied candidate before post-patch regression. They are checked again after each command so an
+unexpected command-time target mutation invalidates the result. The checks cover proposal targets,
+not a whole-repository snapshot. Execution remains bounded and POSIX-only, uses the caller's operating-
+system permissions, and is not an OS security sandbox.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

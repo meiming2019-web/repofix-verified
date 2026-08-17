@@ -12,6 +12,14 @@ approved_commands:
       - -q
       - -p
       - no:cacheprovider
+      - tests/test_header_parser.py::test_empty_header_retains_configured_value
+  regression_tests:
+    argv:
+      - pytest
+      - -q
+      - -p
+      - no:cacheprovider
+      - tests/test_header_parser.py::test_nonempty_header_is_returned
 allowed_source_paths:
   - src
   - tests

@@ -202,7 +202,7 @@ def test_real_fixture_original_behavior_is_not_reproduced_after_patch(
 
     assert command_calls == ["unit_tests"]
     assert result.evidence.exit_code == 0
-    assert "2 passed" in result.evidence.stdout
+    assert "1 passed" in result.evidence.stdout
     assert "test_empty_header_retains_configured_value" not in result.evidence.stdout
     assert result.verifier_verdict.status is ReproductionStatus.NOT_REPRODUCED
     assert (
