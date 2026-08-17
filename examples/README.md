@@ -18,7 +18,7 @@ Do not commit API credentials or a `.env` file.
 
 ```bash
 repofix investigate \
-  --task examples/tasks/empty-header-bug.yaml \
+  --task examples/evaluator/empty-header-bug/task.yaml \
   --workspace examples/fixtures/empty-header-bug \
   --model YOUR_MODEL_NAME \
   --max-steps 8
@@ -214,6 +214,33 @@ applied candidate before post-patch regression. They are checked again after eac
 unexpected command-time target mutation invalidates the result. The checks cover proposal targets,
 not a whole-repository snapshot. Execution remains bounded and POSIX-only, uses the caller's operating-
 system permissions, and is not an OS security sandbox.
+
+## Evaluator-only hidden verification
+
+One canonical evaluator bundle now owns the public task plus reproduction, regression, hidden-
+verification, and gold-patch curation metadata. Its `agent_view()` returns only `AgentTaskSpec`:
+hidden command IDs and argv, evaluator asset paths and hashes, hidden contents, and gold-patch data
+never enter the agent task or model prompt. The checked-in hidden test is under the evaluator asset
+root, physically outside the separate fixture workspace and therefore unreachable through the
+agent's ordinary repository tools.
+
+Hidden verification starts only after the original behavior is absent and the public regression
+command has passed. The evaluator resolves and snapshots exactly one hidden test beneath its external
+asset root, combines its absolute resolved path with evaluator-owned launcher argv, and runs that one
+command exactly once through the existing bounded approved-command executor. Explicit pytest root and
+configuration arguments make the external test import the patched workspace rather than code near the
+evaluator asset. Proposal targets and the hidden asset are checked before and after execution; an
+unexpected command-time mutation invalidates the result.
+
+`hidden_command_passed`, `hidden_command_failed`, and `inconclusive` are evaluator observations, not a
+final repair verdict. Hidden-test behavioral validity is checked separately during fixture curation:
+the pre-fix fixture fails the hidden behavior and the trusted correction passes it. Runtime verification
+does not establish a hidden baseline and never compares the candidate with the gold patch. It makes no
+model call, generates or applies no patch, and performs no retry.
+
+Execution remains POSIX-only, bounded, and not an OS security sandbox; repository tests run with the
+caller's operating-system permissions. Fresh evaluator workspaces, Docker isolation, and broader
+unexpected-change policy remain future evaluator milestones.
 
 ## Troubleshooting
 

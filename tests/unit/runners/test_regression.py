@@ -83,7 +83,7 @@ def test_runner_loads_once_constructs_one_gateway_and_calls_once(
         calls.append(kwargs)
         return expected
 
-    monkeypatch.setattr(module, "load_reproduction_task_bundle", load)
+    monkeypatch.setattr(module, "load_evaluator_task_bundle", load)
     monkeypatch.setattr(module, "LocalApprovedCommandExecutor", Gateway)
     monkeypatch.setattr(module, function_name, invoke)
     task_path = tmp_path / "task.yaml"
@@ -136,7 +136,7 @@ def test_runner_does_not_retry_operational_failure(
     function_name: str,
     extra: dict[str, object],
 ) -> None:
-    monkeypatch.setattr(module, "load_reproduction_task_bundle", lambda path: _bundle())
+    monkeypatch.setattr(module, "load_evaluator_task_bundle", lambda path: _bundle())
     monkeypatch.setattr(module, "LocalApprovedCommandExecutor", lambda **kwargs: object())
     error = ApprovedCommandExecutionError("execution failed")
     calls = 0

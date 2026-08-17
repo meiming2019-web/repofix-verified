@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 _COMMAND_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def validate_command_name(name: str) -> str:
@@ -178,30 +179,40 @@ class AgentTaskSpec(StrictFrozenModel):
         return self
 
 
-class HiddenTestSpec(StrictFrozenModel):
-    """Evaluator-only commands used to run hidden tests."""
+class EvaluatorFileReference(StrictFrozenModel):
+    """One evaluator-root-relative file with canonical expected identity."""
 
-    commands: dict[str, ApprovedCommand]
+    path: str
+    sha256: str
+    size_bytes: int = Field(ge=0)
 
-    @field_validator("commands")
+    @field_validator("path")
     @classmethod
-    def validate_commands(cls, commands: dict[str, ApprovedCommand]) -> dict[str, ApprovedCommand]:
-        return _validate_command_mapping(commands)
+    def validate_path(cls, value: str) -> str:
+        return validate_relative_source_path(value, description="evaluator file path")
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("evaluator file SHA-256 must be lowercase hexadecimal")
+        return value
+
+
+class HiddenVerificationSpecification(StrictFrozenModel):
+    """Evaluator-only configuration for the single hidden command."""
+
+    command_id: str
+    launcher: ApprovedCommand
+    test_file: EvaluatorFileReference
+
+    @field_validator("command_id")
+    @classmethod
+    def validate_command_id(cls, value: str) -> str:
+        return validate_command_name(value)
 
 
 class GoldPatchSpec(StrictFrozenModel):
     """Evaluator-only reference patch data."""
 
     patch: str = Field(min_length=1)
-
-
-class EvaluatorTaskBundle(StrictFrozenModel):
-    """Complete evaluator data with an explicit agent-facing boundary."""
-
-    task: AgentTaskSpec
-    hidden_tests: HiddenTestSpec
-    gold_patch: GoldPatchSpec
-
-    def agent_view(self) -> AgentTaskSpec:
-        """Return only the task information intended for the agent."""
-        return self.task

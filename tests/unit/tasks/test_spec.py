@@ -5,12 +5,15 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from repofix.reproduction import ReproductionExpectation
 from repofix.tasks import (
     AgentTaskSpec,
     ApprovedCommand,
+    EvaluatorFileReference,
     EvaluatorTaskBundle,
     GoldPatchSpec,
-    HiddenTestSpec,
+    HiddenVerificationSpecification,
+    RegressionSpecification,
 )
 
 
@@ -31,6 +34,32 @@ def valid_task_data() -> dict[str, Any]:
         "allowed_source_paths": ["src/repofix", "tests/unit"],
         "timeout_seconds": 300,
     }
+
+
+def evaluator_bundle(task: AgentTaskSpec) -> EvaluatorTaskBundle:
+    return EvaluatorTaskBundle(
+        task=task,
+        reproduction=ReproductionExpectation.model_validate(
+            {
+                "command_id": "unit_tests",
+                "expected_exit_codes": [1],
+                "required_fragments": [
+                    {"fragment_id": "target", "stream": "combined", "text": "failure"}
+                ],
+            }
+        ),
+        regression=RegressionSpecification(command_id="unit_tests"),
+        hidden_verification=HiddenVerificationSpecification(
+            command_id="hidden_tests",
+            launcher=ApprovedCommand(argv=("pytest", "-q")),
+            test_file=EvaluatorFileReference(
+                path="hidden_tests/test_hidden.py",
+                sha256="a" * 64,
+                size_bytes=12,
+            ),
+        ),
+        gold_patch=GoldPatchSpec(patch="diff --git a/file.py b/file.py\n"),
+    )
 
 
 def test_valid_approved_command() -> None:
@@ -305,39 +334,30 @@ def test_models_reject_unknown_fields() -> None:
 
 def test_valid_evaluator_task_bundle() -> None:
     task = AgentTaskSpec.model_validate(valid_task_data())
-    bundle = EvaluatorTaskBundle(
-        task=task,
-        hidden_tests=HiddenTestSpec(
-            commands={"hidden_tests": ApprovedCommand(argv=("pytest", "tests/hidden"))}
-        ),
-        gold_patch=GoldPatchSpec(patch="diff --git a/file.py b/file.py\n"),
-    )
+    bundle = evaluator_bundle(task)
 
     assert bundle.task == task
+    assert bundle.hidden_verification.command_id == "hidden_tests"
 
 
 def test_agent_view_excludes_evaluator_only_information() -> None:
     task = AgentTaskSpec.model_validate(valid_task_data())
-    bundle = EvaluatorTaskBundle(
-        task=task,
-        hidden_tests=HiddenTestSpec(
-            commands={"secret_check": ApprovedCommand(argv=("pytest", "secret_test.py"))}
-        ),
-        gold_patch=GoldPatchSpec(patch="SECRET PATCH CONTENT"),
-    )
+    bundle = evaluator_bundle(task)
 
     agent_view = bundle.agent_view()
     serialized = agent_view.model_dump()
 
     assert agent_view is task
     assert set(serialized) == set(AgentTaskSpec.model_fields)
-    assert "hidden_tests" not in serialized
+    assert "hidden_verification" not in serialized
     assert "gold_patch" not in serialized
-    assert "secret_check" not in repr(serialized)
-    assert "SECRET PATCH CONTENT" not in repr(serialized)
+    assert "hidden_tests" not in repr(serialized)
+    assert "hidden_tests/test_hidden.py" not in repr(serialized)
 
 
-@pytest.mark.parametrize("field", ["hidden_tests", "gold_patch", "reproduction"])
+@pytest.mark.parametrize(
+    "field", ["hidden_verification", "gold_patch", "reproduction", "regression"]
+)
 def test_agent_task_rejects_evaluator_only_fields(field: str) -> None:
     data = valid_task_data()
     data[field] = {}

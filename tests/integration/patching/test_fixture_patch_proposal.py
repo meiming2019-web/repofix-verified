@@ -33,7 +33,7 @@ from repofix.reproduction import (
     ReproductionVerdict,
     compute_reproduction_expectation_fingerprint,
 )
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 from repofix.runners import run_patch_proposal_from_paths
 
 
@@ -138,7 +138,7 @@ def test_fixture_proposal_is_validated_without_application(tmp_path: Path) -> No
         workspace,
         ignore=shutil.ignore_patterns(".pytest_cache", "__pycache__"),
     )
-    bundle = load_reproduction_task_bundle(root / "examples/reproduction/empty-header-bug.yaml")
+    bundle = load_evaluator_task_bundle(root / "examples/evaluator/empty-header-bug/task.yaml")
     source = workspace / "src/header_parser.py"
     test_file = workspace / "tests/test_header_parser.py"
     before = (source.read_bytes(), test_file.read_bytes())
@@ -206,10 +206,10 @@ def test_expectation_changes_reject_old_result_before_model_call(
     tmp_path: Path, old: str, new: str, count: int
 ) -> None:
     root = Path(__file__).resolve().parents[3]
-    original_task_path = root / "examples/reproduction/empty-header-bug.yaml"
+    original_task_path = root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(root / "examples/fixtures/empty-header-bug", workspace)
-    bundle = load_reproduction_task_bundle(original_task_path)
+    bundle = load_evaluator_task_bundle(original_task_path)
     result = reproduced_result(bundle, workspace)
     changed_task_path = tmp_path / "changed.yaml"
     contents = original_task_path.read_text(encoding="utf-8")
@@ -230,10 +230,10 @@ def test_expectation_changes_reject_old_result_before_model_call(
 
 def test_task_mismatch_and_stale_source_reject_before_model_call(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[3]
-    task_path = root / "examples/reproduction/empty-header-bug.yaml"
+    task_path = root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(root / "examples/fixtures/empty-header-bug", workspace)
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     result = reproduced_result(bundle, workspace)
 
     wrong_state = result.state.model_copy(update={"task_id": "other-task"})

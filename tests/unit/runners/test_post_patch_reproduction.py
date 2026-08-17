@@ -115,7 +115,7 @@ def test_runner_loads_bundle_constructs_gateway_once_and_verifies_once(
         verification_calls.append(kwargs)
         return expected
 
-    monkeypatch.setattr(runner_module, "load_reproduction_task_bundle", load)
+    monkeypatch.setattr(runner_module, "load_evaluator_task_bundle", load)
     monkeypatch.setattr(runner_module, "LocalApprovedCommandExecutor", Gateway)
     monkeypatch.setattr(runner_module, "verify_post_patch_reproduction", verify)
 
@@ -144,7 +144,7 @@ def test_runner_rejects_current_expectation_mismatch_before_gateway(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _, _, reproduction_result, bundle, proposal, application, workspace = _inputs(tmp_path)
-    monkeypatch.setattr(runner_module, "load_reproduction_task_bundle", lambda path: bundle)
+    monkeypatch.setattr(runner_module, "load_evaluator_task_bundle", lambda path: bundle)
     monkeypatch.setattr(
         runner_module,
         "compute_reproduction_expectation_fingerprint",
@@ -175,7 +175,7 @@ def test_verification_failure_is_not_retried(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _, _, reproduction_result, bundle, proposal, application, workspace = _inputs(tmp_path)
-    monkeypatch.setattr(runner_module, "load_reproduction_task_bundle", lambda path: bundle)
+    monkeypatch.setattr(runner_module, "load_evaluator_task_bundle", lambda path: bundle)
     monkeypatch.setattr(runner_module, "LocalApprovedCommandExecutor", lambda **kwargs: object())
     error = ApprovedCommandExecutionError("execution failed")
     calls = 0

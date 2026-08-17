@@ -17,7 +17,7 @@ import pytest
         "import repofix.reproduction; import repofix.tasks",
         (
             "from repofix.reproduction import "
-            "ReproductionEvidence, ReproductionExpectation, ReproductionTaskBundle, "
+            "ReproductionEvidence, ReproductionExpectation, "
             "ReproductionVerificationError, verify_reproduction"
         ),
         (

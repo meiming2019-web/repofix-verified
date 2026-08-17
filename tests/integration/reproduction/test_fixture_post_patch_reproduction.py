@@ -34,7 +34,7 @@ from repofix.runners import (
     run_post_patch_reproduction_from_paths,
     run_reproduction_from_paths,
 )
-from repofix.tasks import AgentTaskSpec, load_reproduction_task_bundle
+from repofix.tasks import AgentTaskSpec, load_evaluator_task_bundle
 
 
 class ReproductionScript:
@@ -120,7 +120,7 @@ def _applied_fixture(
     tmp_path: Path, *, line: int, replacement: str, rationale: str
 ) -> AppliedFixture:
     root = Path(__file__).resolve().parents[3]
-    task_path = root / "examples/reproduction/empty-header-bug.yaml"
+    task_path = root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(
         root / "examples/fixtures/empty-header-bug",
@@ -255,7 +255,7 @@ def test_applied_fixture_timeout_is_inconclusive_without_retry(tmp_path: Path) -
         replacement="        return configured_value\n",
         rationale="Preserve the configured value for empty headers.",
     )
-    bundle = load_reproduction_task_bundle(fixture.task_path)
+    bundle = load_evaluator_task_bundle(fixture.task_path)
 
     class TimeoutGateway:
         def __init__(self) -> None:

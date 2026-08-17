@@ -16,11 +16,9 @@ from repofix.reproduction import (
     ReproductionOutputFragment,
     ReproductionOutputStream,
     ReproductionStatus,
-    ReproductionTaskBundle,
     ReproductionVerdict,
     compute_reproduction_expectation_fingerprint,
 )
-from repofix.tasks import AgentTaskSpec, RegressionSpecification
 
 
 def task_data() -> dict[str, Any]:
@@ -171,47 +169,6 @@ def test_reproduction_models_reject_unknown_fields() -> None:
 
     with pytest.raises(ValidationError):
         ReproductionExpectation.model_validate(data)
-
-
-def test_bundle_requires_an_exact_approved_command_id() -> None:
-    task = AgentTaskSpec.model_validate(task_data())
-    data = expectation_data()
-    data["command_id"] = "other_tests"
-
-    with pytest.raises(ValidationError):
-        ReproductionTaskBundle(
-            task=task,
-            reproduction=ReproductionExpectation.model_validate(data),
-            regression=RegressionSpecification(command_id="unit_tests"),
-        )
-
-
-def test_bundle_requires_an_approved_regression_command() -> None:
-    task = AgentTaskSpec.model_validate(task_data())
-
-    with pytest.raises(ValidationError, match="regression command ID"):
-        ReproductionTaskBundle(
-            task=task,
-            reproduction=ReproductionExpectation.model_validate(expectation_data()),
-            regression=RegressionSpecification(command_id="other_tests"),
-        )
-
-
-def test_bundle_agent_view_excludes_reproduction_data() -> None:
-    task = AgentTaskSpec.model_validate(task_data())
-    bundle = ReproductionTaskBundle(
-        task=task,
-        reproduction=ReproductionExpectation.model_validate(expectation_data()),
-        regression=RegressionSpecification(command_id="unit_tests"),
-    )
-
-    agent_view = bundle.agent_view()
-    rendered = repr(agent_view.model_dump())
-
-    assert agent_view is task
-    assert set(agent_view.model_dump()) == set(AgentTaskSpec.model_fields)
-    assert "reproduction" not in rendered
-    assert "target-failure" not in rendered
 
 
 def test_evidence_constructor_is_strict_frozen_and_deterministic() -> None:

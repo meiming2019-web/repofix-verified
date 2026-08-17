@@ -89,7 +89,7 @@ class PatchScript:
 
 def test_real_reproduction_to_patch_runner_happy_path(tmp_path: Path) -> None:
     repository_root = Path(__file__).resolve().parents[3]
-    task_path = repository_root / "examples/reproduction/empty-header-bug.yaml"
+    task_path = repository_root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(
         repository_root / "examples/fixtures/empty-header-bug",

@@ -19,6 +19,7 @@ from repofix.runners.regression_baseline import run_regression_baseline_from_pat
 from repofix.runners.regression_verification import (
     run_regression_verification_from_paths,
 )
+from repofix.runners.hidden_verification import run_hidden_verification_from_paths
 
 __all__ = [
     "MAX_INVESTIGATION_STEPS",
@@ -26,6 +27,7 @@ __all__ = [
     "MAX_REPRODUCTION_STEPS",
     "render_investigation_report",
     "run_investigation_from_paths",
+    "run_hidden_verification_from_paths",
     "run_patch_application_from_paths",
     "run_patch_proposal_from_paths",
     "run_post_patch_reproduction_from_paths",

@@ -12,7 +12,7 @@ from repofix.patching import (
     apply_validated_patch_proposal,
 )
 from repofix.reproduction import compute_reproduction_expectation_fingerprint
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def run_patch_application_from_paths(
@@ -23,7 +23,7 @@ def run_patch_application_from_paths(
     proposal: ValidatedPatchProposal,
 ) -> PatchApplicationResult:
     """Load the trusted bundle and apply one already validated proposal."""
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     if reproduction_result.state.task_id != task.task_id:
         raise ValueError("reproduction result does not belong to the patch application task")

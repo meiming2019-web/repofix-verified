@@ -21,7 +21,7 @@ def test_fixture_approved_command_captures_raw_failing_test_evidence(
         workspace,
         ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"),
     )
-    task = load_agent_task_spec(repository_root / "examples/tasks/empty-header-bug.yaml")
+    task = load_agent_task_spec(repository_root / "examples/evaluator/empty-header-bug/task.yaml")
     source = workspace / "src/header_parser.py"
     test_file = workspace / "tests/test_header_parser.py"
     before = {source: source.read_bytes(), test_file: test_file.read_bytes()}

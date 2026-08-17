@@ -22,7 +22,7 @@ def test_runner_rejects_task_without_patchable_paths(
         }
     )
     bundle = type("Bundle", (), {"agent_view": lambda self: task})()
-    monkeypatch.setattr(runner, "load_reproduction_task_bundle", lambda path: bundle)
+    monkeypatch.setattr(runner, "load_evaluator_task_bundle", lambda path: bundle)
     with pytest.raises(ValueError, match="patchable"):
         runner.run_patch_proposal_from_paths(
             task_path=tmp_path / "task.yaml",

@@ -37,6 +37,16 @@ reproduction:
       text: TARGET FAILURE
 regression:
   command_id: unit_tests
+hidden_verification:
+  command_id: hidden_tests
+  launcher:
+    argv: [pytest, -q]
+  test_file:
+    path: hidden_tests/test_hidden.py
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    size_bytes: 12
+gold_patch:
+  patch: trusted-curation-patch
 """
 
 

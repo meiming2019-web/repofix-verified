@@ -7,6 +7,7 @@ from repofix.regression import (
     RegressionSpecification,
     compute_regression_baseline_fingerprint,
     compute_regression_specification_fingerprint,
+    compute_regression_verification_fingerprint,
     verify_post_patch_regression,
 )
 from repofix.patching import compute_patch_application_result_fingerprint
@@ -74,6 +75,15 @@ def test_baseline_and_verification_results_are_frozen_and_fingerprinted(
     )
     assert post_patch_fingerprint != compute_post_patch_reproduction_fingerprint(
         prepared_verification.post_patch.model_copy(update={"task_id": "changed"})
+    )
+    verification_fingerprint = compute_regression_verification_fingerprint(
+        verification
+    )
+    assert verification_fingerprint == compute_regression_verification_fingerprint(
+        verification
+    )
+    assert verification_fingerprint != compute_regression_verification_fingerprint(
+        verification.model_copy(update={"task_id": "changed"})
     )
     with pytest.raises(ValidationError):
         baseline.status = baseline.status  # type: ignore[misc]

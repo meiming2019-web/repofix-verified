@@ -10,7 +10,7 @@ from repofix.runners import (
     run_patch_application_from_paths,
     run_patch_proposal_from_paths,
 )
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def _reproduced_result(bundle, workspace):
@@ -47,14 +47,14 @@ class DeterministicPatchModel:
 
 def test_fixture_validated_proposal_is_applied_without_verification(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[3]
-    task_path = root / "examples/reproduction/empty-header-bug.yaml"
+    task_path = root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(
         root / "examples/fixtures/empty-header-bug",
         workspace,
         ignore=shutil.ignore_patterns(".pytest_cache", "__pycache__"),
     )
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     reproduction_result = _reproduced_result(bundle, workspace)
     source = workspace / "src/header_parser.py"
     test_file = workspace / "tests/test_header_parser.py"

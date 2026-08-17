@@ -6,7 +6,7 @@ from repofix.agent.reproduction_loop import ReproductionAgentRunResult
 from repofix.execution import LocalApprovedCommandExecutor
 from repofix.patching import ValidatedPatchProposal
 from repofix.regression import RegressionBaselineResult, establish_regression_baseline
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def run_regression_baseline_from_paths(
@@ -17,7 +17,7 @@ def run_regression_baseline_from_paths(
     proposal: ValidatedPatchProposal,
 ) -> RegressionBaselineResult:
     """Load evaluator data and execute its regression command once before patching."""
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     command_gateway = LocalApprovedCommandExecutor(
         workspace_root=workspace_root,

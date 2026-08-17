@@ -13,7 +13,7 @@ from repofix.reproduction import (
     ReproductionTerminationReason,
     verify_reproduction,
 )
-from repofix.tasks import AgentTaskSpec, load_reproduction_task_bundle
+from repofix.tasks import AgentTaskSpec, load_evaluator_task_bundle
 
 
 def test_checked_in_fixture_is_reproduced_without_model_or_repository_mutation(
@@ -27,8 +27,8 @@ def test_checked_in_fixture_is_reproduced_without_model_or_repository_mutation(
         workspace,
         ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"),
     )
-    bundle = load_reproduction_task_bundle(
-        repository_root / "examples/reproduction/empty-header-bug.yaml"
+    bundle = load_evaluator_task_bundle(
+        repository_root / "examples/evaluator/empty-header-bug/task.yaml"
     )
     task = bundle.agent_view()
     source = workspace / "src/header_parser.py"
@@ -83,15 +83,17 @@ def test_checked_in_fixture_is_reproduced_without_model_or_repository_mutation(
     verdict_rendered = repr(verdict.model_dump())
     assert type(task) is AgentTaskSpec
     assert "reproduction" not in repr(agent_serialized)
-    assert "hidden_tests" not in evaluator_rendered
-    assert "gold_patch" not in evaluator_rendered
+    assert "hidden_tests" not in repr(agent_serialized)
+    assert "gold_patch" not in repr(agent_serialized)
+    assert "hidden_tests" in evaluator_rendered
+    assert "gold_patch" in evaluator_rendered
     assert "patch" not in verdict_rendered
 
 
 def test_unrelated_exit_one_evidence_is_inconclusive() -> None:
     repository_root = Path(__file__).resolve().parents[3]
-    bundle = load_reproduction_task_bundle(
-        repository_root / "examples/reproduction/empty-header-bug.yaml"
+    bundle = load_evaluator_task_bundle(
+        repository_root / "examples/evaluator/empty-header-bug/task.yaml"
     )
     unrelated_output = "FAILED tests/test_other.py - AssertionError: unrelated failure\n"
     evidence = ReproductionEvidence(

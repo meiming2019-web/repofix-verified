@@ -17,6 +17,7 @@ from repofix.regression.models import (
     RegressionVerificationStatus,
     compute_regression_baseline_fingerprint,
     compute_regression_specification_fingerprint,
+    compute_regression_verification_fingerprint,
 )
 from repofix.regression.verification import (
     RegressionVerificationError,
@@ -40,6 +41,7 @@ __all__ = [
     "RegressionVerificationStatus",
     "compute_regression_baseline_fingerprint",
     "compute_regression_specification_fingerprint",
+    "compute_regression_verification_fingerprint",
     "establish_regression_baseline",
     "verify_post_patch_regression",
 ]

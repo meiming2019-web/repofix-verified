@@ -3,11 +3,12 @@
 from pathlib import Path, PurePosixPath
 from typing import Callable, TypeVar
 
-from repofix.patching.models import ValidatedPatchProposal
+from repofix.patching.models import PatchApplicationResult, ValidatedPatchProposal
 from repofix.patching.validator import (
     PatchProposalValidationError,
     _FileSnapshot,
     _read_snapshot,
+    _verify_snapshot,
 )
 
 
@@ -73,12 +74,47 @@ def verify_targets_unchanged(
     error_factory: Callable[[str], ErrorT],
     stage: str,
 ) -> None:
-    for path, expected in before.items():
+    for expected in before.values():
+        try:
+            _verify_snapshot(workspace=workspace, snapshot=expected)
+        except PatchProposalValidationError as error:
+            raise error_factory(f"{stage} command modified a proposal target") from error
+
+
+def capture_applied_targets(
+    *,
+    workspace: Path,
+    proposal: ValidatedPatchProposal,
+    application: PatchApplicationResult,
+    error_factory: Callable[[str], ErrorT],
+    stage: str,
+) -> dict[str, _FileSnapshot]:
+    """Validate applied candidate metadata and capture current proposal targets."""
+    proposals = {item.path: item for item in proposal.file_snapshots}
+    applied = {item.path: item for item in application.files}
+    if set(proposals) != set(applied):
+        raise error_factory(f"{stage} application paths do not match the proposal")
+    before: dict[str, _FileSnapshot] = {}
+    for path in sorted(proposals):
+        expected = proposals[path]
+        actual = applied[path]
+        if (
+            actual.original_file_sha256 != expected.original_file_sha256
+            or actual.original_size_bytes != expected.size_bytes
+            or actual.candidate_file_sha256 != expected.candidate_file_sha256
+            or actual.candidate_size_bytes != expected.candidate_size_bytes
+        ):
+            raise error_factory(f"{stage} application metadata does not match the proposal")
         current = read_target(
             workspace=workspace,
             path=path,
             error_factory=error_factory,
             stage=stage,
         )
-        if current.sha256 != expected.sha256 or current.size != expected.size:
-            raise error_factory(f"{stage} command modified a proposal target")
+        if (
+            current.sha256 != actual.candidate_file_sha256
+            or current.size != actual.candidate_size_bytes
+        ):
+            raise error_factory(f"{stage} workspace does not match the applied candidate")
+        before[path] = current
+    return before

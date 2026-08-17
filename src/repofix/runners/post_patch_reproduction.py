@@ -13,7 +13,7 @@ from repofix.reproduction.post_patch import (
     verify_post_patch_reproduction,
 )
 from repofix.reproduction.models import compute_reproduction_expectation_fingerprint
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def run_post_patch_reproduction_from_paths(
@@ -25,7 +25,7 @@ def run_post_patch_reproduction_from_paths(
     application_result: PatchApplicationResult,
 ) -> PostPatchReproductionResult:
     """Load the current bundle and rerun its reproduction command exactly once."""
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     if original_reproduction_result.state.task_id != task.task_id:
         raise ValueError("original reproduction result does not belong to the current task")

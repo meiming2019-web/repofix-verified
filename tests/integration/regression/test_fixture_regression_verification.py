@@ -33,7 +33,7 @@ from repofix.runners import (
     run_regression_verification_from_paths,
     run_reproduction_from_paths,
 )
-from repofix.tasks import AgentTaskSpec, load_reproduction_task_bundle
+from repofix.tasks import AgentTaskSpec, load_evaluator_task_bundle
 
 
 class ReproductionScript:
@@ -117,7 +117,7 @@ class Chain:
 
 def _chain(tmp_path: Path, *, start: int, end: int, replacement: str) -> Chain:
     root = Path(__file__).resolve().parents[3]
-    task_path = root / "examples/reproduction/empty-header-bug.yaml"
+    task_path = root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = tmp_path / "fixture"
     shutil.copytree(
         root / "examples/fixtures/empty-header-bug",
@@ -246,7 +246,7 @@ def test_timeout_after_real_passing_baseline_is_inconclusive_without_retry(
         end=9,
         replacement="        return configured_value\n",
     )
-    bundle = load_reproduction_task_bundle(chain.task_path)
+    bundle = load_evaluator_task_bundle(chain.task_path)
 
     class TimeoutGateway:
         def __init__(self) -> None:

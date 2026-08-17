@@ -9,9 +9,9 @@ from typing import Self
 from pydantic import field_validator, model_validator
 
 from repofix.patching.models import PatchApplicationStatus
-from repofix.regression.classifier import (
-    RegressionCommandOutcome,
-    classify_regression_evidence,
+from repofix.execution.classifier import (
+    CommandOutcome,
+    classify_command_evidence,
 )
 from repofix.reproduction.models import ReproductionEvidence
 from repofix.reproduction.post_patch import PostPatchReproductionStatus
@@ -54,9 +54,9 @@ REGRESSION_BASELINE_INCONCLUSIVE_SUMMARY = (
 )
 
 _BASELINE_STATUS_BY_OUTCOME = {
-    RegressionCommandOutcome.PASSED: RegressionBaselineStatus.PASSED,
-    RegressionCommandOutcome.FAILED: RegressionBaselineStatus.FAILED,
-    RegressionCommandOutcome.INCONCLUSIVE: RegressionBaselineStatus.INCONCLUSIVE,
+    CommandOutcome.PASSED: RegressionBaselineStatus.PASSED,
+    CommandOutcome.FAILED: RegressionBaselineStatus.FAILED,
+    CommandOutcome.INCONCLUSIVE: RegressionBaselineStatus.INCONCLUSIVE,
 }
 _BASELINE_SUMMARY_BY_STATUS = {
     RegressionBaselineStatus.PASSED: REGRESSION_BASELINE_PASSED_SUMMARY,
@@ -66,7 +66,7 @@ _BASELINE_SUMMARY_BY_STATUS = {
 
 
 def baseline_status_for(evidence: ReproductionEvidence) -> RegressionBaselineStatus:
-    return _BASELINE_STATUS_BY_OUTCOME[classify_regression_evidence(evidence)]
+    return _BASELINE_STATUS_BY_OUTCOME[classify_command_evidence(evidence)]
 
 
 def baseline_summary_for(status: RegressionBaselineStatus) -> str:
@@ -103,7 +103,7 @@ class RegressionBaselineResult(StrictFrozenModel):
         if self.command_id != self.evidence.command_id:
             raise ValueError("regression baseline command identity must match its evidence")
         expected_status = _BASELINE_STATUS_BY_OUTCOME[
-            classify_regression_evidence(self.evidence)
+            classify_command_evidence(self.evidence)
         ]
         if self.status is not expected_status:
             raise ValueError("regression baseline status does not match its evidence")
@@ -143,13 +143,13 @@ REGRESSION_VERIFICATION_INCONCLUSIVE_SUMMARY = (
 )
 
 _VERIFICATION_STATUS_BY_OUTCOME = {
-    RegressionCommandOutcome.PASSED: (
+    CommandOutcome.PASSED: (
         RegressionVerificationStatus.REGRESSION_COMMAND_PASSED
     ),
-    RegressionCommandOutcome.FAILED: (
+    CommandOutcome.FAILED: (
         RegressionVerificationStatus.REGRESSION_COMMAND_FAILED
     ),
-    RegressionCommandOutcome.INCONCLUSIVE: RegressionVerificationStatus.INCONCLUSIVE,
+    CommandOutcome.INCONCLUSIVE: RegressionVerificationStatus.INCONCLUSIVE,
 }
 _VERIFICATION_SUMMARY_BY_STATUS = {
     RegressionVerificationStatus.REGRESSION_COMMAND_PASSED: (
@@ -167,7 +167,7 @@ _VERIFICATION_SUMMARY_BY_STATUS = {
 def verification_status_for(
     evidence: ReproductionEvidence,
 ) -> RegressionVerificationStatus:
-    return _VERIFICATION_STATUS_BY_OUTCOME[classify_regression_evidence(evidence)]
+    return _VERIFICATION_STATUS_BY_OUTCOME[classify_command_evidence(evidence)]
 
 
 def verification_summary_for(status: RegressionVerificationStatus) -> str:
@@ -219,10 +219,23 @@ class RegressionVerificationResult(StrictFrozenModel):
         if self.command_id != self.evidence.command_id:
             raise ValueError("regression verification command identity must match evidence")
         expected_status = _VERIFICATION_STATUS_BY_OUTCOME[
-            classify_regression_evidence(self.evidence)
+            classify_command_evidence(self.evidence)
         ]
         if self.status is not expected_status:
             raise ValueError("regression verification status does not match its evidence")
         if self.verification_summary != _VERIFICATION_SUMMARY_BY_STATUS[self.status]:
             raise ValueError("regression verification requires its canonical system summary")
         return self
+
+
+def compute_regression_verification_fingerprint(
+    result: RegressionVerificationResult,
+) -> str:
+    """Hash the complete public-regression result using canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

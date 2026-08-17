@@ -112,7 +112,7 @@ def test_fixture_runs_through_agent_requested_reproduction_stack(
     model = FixtureReproductionModel()
 
     result = run_reproduction_from_paths(
-        task_path=repository_root / "examples/reproduction/empty-header-bug.yaml",
+        task_path=repository_root / "examples/evaluator/empty-header-bug/task.yaml",
         workspace_root=workspace,
         model=model,
         max_steps=6,

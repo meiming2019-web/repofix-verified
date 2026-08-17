@@ -366,6 +366,16 @@ reproduction:
       text: FORBIDDEN_SENTINEL_TEXT
 regression:
   command_id: unit_tests
+hidden_verification:
+  command_id: hidden-secret-command
+  launcher:
+    argv: [hidden-secret-launcher, --private]
+  test_file:
+    path: hidden_tests/secret_hidden_test.py
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    size_bytes: 99
+gold_patch:
+  patch: SECRET_GOLD_PATCH
 """,
         encoding="utf-8",
     )
@@ -384,6 +394,11 @@ regression:
     assert "REQUIRED_SENTINEL_TEXT" not in user_prompt
     assert "forbidden-sentinel-id" not in user_prompt
     assert "FORBIDDEN_SENTINEL_TEXT" not in user_prompt
+    assert "hidden-secret-command" not in user_prompt
+    assert "hidden-secret-launcher" not in user_prompt
+    assert "secret_hidden_test.py" not in user_prompt
+    assert "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" not in user_prompt
+    assert "SECRET_GOLD_PATCH" not in user_prompt
 
 
 def test_later_prompt_contains_observations_and_hypotheses() -> None:

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from repofix.reproduction import ReproductionTaskBundle
 from repofix.tasks import (
     AgentTaskSpec,
+    EvaluatorTaskBundle,
     TaskSpecLoadError,
     load_agent_task_spec,
     load_evaluator_task_bundle,
@@ -18,52 +18,6 @@ from repofix.tasks import loader
 
 
 VALID_BUNDLE_YAML = """\
-task:
-  task_id: task-001
-  repository_url: https://github.com/example/project.git
-  pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
-  issue_title: Fix the failing behavior
-  issue_body: The command produces an incorrect result.
-  approved_commands:
-    unit_tests:
-      argv:
-        - pytest
-        - -q
-  allowed_source_paths:
-    - src/repofix
-    - tests/unit
-  timeout_seconds: 300
-hidden_tests:
-  commands:
-    hidden_tests:
-      argv:
-        - pytest
-        - tests/hidden
-gold_patch:
-  patch: |-
-    diff --git a/file.py b/file.py
-    --- a/file.py
-    +++ b/file.py
-"""
-
-VALID_AGENT_YAML = """\
-task_id: task-001
-repository_url: https://github.com/example/project.git
-pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
-issue_title: Fix the failing behavior
-issue_body: The command produces an incorrect result.
-approved_commands:
-  unit_tests:
-    argv:
-      - pytest
-      - -q
-allowed_source_paths:
-  - src/repofix
-  - tests/unit
-timeout_seconds: 300
-"""
-
-VALID_REPRODUCTION_YAML = """\
 task:
   task_id: task-001
   repository_url: https://github.com/example/project.git
@@ -93,7 +47,41 @@ reproduction:
       text: SENTINEL forbidden import text
 regression:
   command_id: unit_tests
+hidden_verification:
+  command_id: hidden_tests
+  launcher:
+    argv:
+      - pytest
+      - -q
+  test_file:
+    path: hidden_tests/test_hidden.py
+    sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    size_bytes: 12
+gold_patch:
+  patch: |-
+    diff --git a/file.py b/file.py
+    --- a/file.py
+    +++ b/file.py
 """
+
+VALID_AGENT_YAML = """\
+task_id: task-001
+repository_url: https://github.com/example/project.git
+pre_fix_commit: 0123456789abcdef0123456789abcdef01234567
+issue_title: Fix the failing behavior
+issue_body: The command produces an incorrect result.
+approved_commands:
+  unit_tests:
+    argv:
+      - pytest
+      - -q
+allowed_source_paths:
+  - src/repofix
+  - tests/unit
+timeout_seconds: 300
+"""
+
+VALID_REPRODUCTION_YAML = VALID_BUNDLE_YAML
 
 
 class RecordingBytesIO(BytesIO):
@@ -120,7 +108,8 @@ def test_loads_valid_evaluator_task_bundle(tmp_path: Path) -> None:
     bundle = load_evaluator_task_bundle(write_yaml(tmp_path))
 
     assert bundle.task.task_id == "task-001"
-    assert bundle.hidden_tests.commands["hidden_tests"].argv == ("pytest", "tests/hidden")
+    assert bundle.hidden_verification.command_id == "hidden_tests"
+    assert bundle.hidden_verification.launcher.argv == ("pytest", "-q")
     assert bundle.gold_patch.patch.startswith("diff --git")
 
 
@@ -153,7 +142,7 @@ def test_loads_valid_reproduction_bundle(tmp_path: Path) -> None:
         write_yaml(tmp_path, VALID_REPRODUCTION_YAML)
     )
 
-    assert type(bundle) is ReproductionTaskBundle
+    assert type(bundle) is EvaluatorTaskBundle
     assert bundle.reproduction.command_id == "unit_tests"
     assert bundle.reproduction.expected_exit_codes == (1,)
     assert bundle.regression.command_id == "unit_tests"
@@ -217,17 +206,12 @@ def test_reproduction_loader_requires_approved_command_reference(tmp_path: Path)
         load_reproduction_task_bundle(write_yaml(tmp_path, contents))
 
 
-def test_agent_loader_rejects_ambiguous_evaluator_bundle(tmp_path: Path) -> None:
-    contents = (
-        f"{VALID_REPRODUCTION_YAML}"
-        "hidden_tests:\n"
-        "  commands:\n"
-        "    hidden_tests:\n"
-        "      argv: [pytest]\n"
-    )
+def test_canonical_evaluator_bundle_has_no_competing_top_level_shape(
+    tmp_path: Path,
+) -> None:
+    task = load_agent_task_spec(write_yaml(tmp_path, VALID_BUNDLE_YAML))
 
-    with pytest.raises(TaskSpecLoadError, match="ambiguous"):
-        load_agent_task_spec(write_yaml(tmp_path, contents))
+    assert type(task) is AgentTaskSpec
 
 
 def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Path) -> None:
@@ -237,19 +221,19 @@ def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Pat
 
     assert type(task) is AgentTaskSpec
     assert set(serialized) == set(AgentTaskSpec.model_fields)
-    assert "hidden_tests" not in rendered
+    assert "hidden_verification" not in rendered
     assert "gold_patch" not in rendered
-    assert "tests/hidden" not in rendered
+    assert "hidden_tests/test_hidden.py" not in rendered
     assert "diff --git" not in rendered
 
 
 @pytest.mark.parametrize(
     "evaluator_data",
     [
-        "hidden_tests:\n  commands:\n    hidden_tests:\n      argv: [pytest]\n",
+        "hidden_verification:\n  command_id: hidden\n",
         "gold_patch:\n  patch: secret patch\n",
     ],
-    ids=["hidden-tests", "gold-patch"],
+    ids=["hidden-verification", "gold-patch"],
 )
 def test_agent_only_document_rejects_evaluator_fields(
     tmp_path: Path, evaluator_data: str
@@ -295,9 +279,9 @@ def test_agent_serialization_excludes_evaluator_data(tmp_path: Path) -> None:
     rendered = repr(serialized)
 
     assert set(serialized) == set(AgentTaskSpec.model_fields)
-    assert "hidden_tests" not in serialized
+    assert "hidden_verification" not in serialized
     assert "gold_patch" not in serialized
-    assert "tests/hidden" not in rendered
+    assert "hidden_tests/test_hidden.py" not in rendered
     assert "diff --git" not in rendered
 
 
@@ -441,14 +425,14 @@ def test_rejects_duplicate_nested_keys(tmp_path: Path) -> None:
 
 
 def test_rejects_yaml_alias_usage(tmp_path: Path) -> None:
-    contents = "task: *missing\nhidden_tests: {}\ngold_patch: {}\n"
+    contents = "task: *missing\nhidden_verification: {}\ngold_patch: {}\n"
 
     with pytest.raises(TaskSpecLoadError, match="aliases"):
         load_evaluator_task_bundle(write_yaml(tmp_path, contents))
 
 
 def test_rejects_unreferenced_yaml_anchor(tmp_path: Path) -> None:
-    contents = "task: &task {}\nhidden_tests: {}\ngold_patch: {}\n"
+    contents = "task: &task {}\nhidden_verification: {}\ngold_patch: {}\n"
 
     with pytest.raises(TaskSpecLoadError, match="anchors"):
         load_evaluator_task_bundle(write_yaml(tmp_path, contents))
@@ -482,7 +466,7 @@ def test_rejects_model_validation_failure(tmp_path: Path) -> None:
 def test_error_message_does_not_expose_evaluator_secrets(tmp_path: Path) -> None:
     hidden_secret = "do-not-expose-hidden-command"
     patch_secret = "do-not-expose-gold-patch"
-    contents = VALID_BUNDLE_YAML.replace("tests/hidden", hidden_secret).replace(
+    contents = VALID_BUNDLE_YAML.replace("hidden_tests/test_hidden.py", hidden_secret).replace(
         "diff --git a/file.py b/file.py", patch_secret
     )
     contents = contents.replace("0123456789abcdef0123456789abcdef01234567", "invalid")

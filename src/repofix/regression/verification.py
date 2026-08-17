@@ -20,7 +20,7 @@ from repofix.patching.models import (
     compute_patch_application_result_fingerprint,
 )
 from repofix.regression._workspace import (
-    read_target,
+    capture_applied_targets,
     resolve_workspace,
     verify_targets_unchanged,
 )
@@ -48,7 +48,6 @@ from repofix.tasks.spec import AgentTaskSpec, RegressionSpecification
 
 if TYPE_CHECKING:
     from repofix.agent import ApprovedCommandGateway
-    from repofix.patching.validator import _FileSnapshot
 
 
 class RegressionVerificationError(RuntimeError):
@@ -179,42 +178,6 @@ def _verify_chain(
     )
 
 
-def _capture_applied_targets(
-    *,
-    workspace: Path,
-    proposal: ValidatedPatchProposal,
-    application: PatchApplicationResult,
-) -> dict[str, _FileSnapshot]:
-    proposals = {item.path: item for item in proposal.file_snapshots}
-    applied = {item.path: item for item in application.files}
-    if set(proposals) != set(applied):
-        _fail("patch application file paths do not match the proposal")
-    before: dict[str, _FileSnapshot] = {}
-    for path in sorted(proposals):
-        expected = proposals[path]
-        actual = applied[path]
-        if (
-            actual.original_file_sha256 != expected.original_file_sha256
-            or actual.original_size_bytes != expected.size_bytes
-            or actual.candidate_file_sha256 != expected.candidate_file_sha256
-            or actual.candidate_size_bytes != expected.candidate_size_bytes
-        ):
-            _fail("patch application file metadata does not match the proposal")
-        current = read_target(
-            workspace=workspace,
-            path=path,
-            error_factory=RegressionVerificationError,
-            stage="regression verification",
-        )
-        if (
-            current.sha256 != actual.candidate_file_sha256
-            or current.size != actual.candidate_size_bytes
-        ):
-            _fail("regression verification workspace does not match the applied candidate")
-        before[path] = current
-    return before
-
-
 def verify_post_patch_regression(
     *,
     workspace_root: Path,
@@ -296,10 +259,12 @@ def verify_post_patch_regression(
         error_type=RegressionVerificationError,
         stage="regression verification",
     )
-    before = _capture_applied_targets(
+    before = capture_applied_targets(
         workspace=workspace,
         proposal=canonical_proposal,
         application=canonical_application,
+        error_factory=RegressionVerificationError,
+        stage="regression verification",
     )
 
     command_id = canonical_specification.command_id

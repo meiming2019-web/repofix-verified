@@ -13,7 +13,7 @@ from repofix.patching import (
     build_patch_proposal_context,
     validate_patch_proposal,
 )
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def _reproduced_result(bundle, workspace):
@@ -50,7 +50,7 @@ def test_real_adapter_fake_provider_to_validated_fixture_proposal(
         workspace,
         ignore=shutil.ignore_patterns(".pytest_cache", "__pycache__"),
     )
-    bundle = load_reproduction_task_bundle(root / "examples/reproduction/empty-header-bug.yaml")
+    bundle = load_evaluator_task_bundle(root / "examples/evaluator/empty-header-bug/task.yaml")
     result = _reproduced_result(bundle, workspace)
     context = build_patch_proposal_context(task=bundle.agent_view(), reproduction_result=result)
     ambient_credential = "ambient-provider-credential-must-stay-private"

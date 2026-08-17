@@ -8,7 +8,7 @@ from repofix.agent.reproduction_loop import (
     run_reproduction_agent_loop,
 )
 from repofix.execution import LocalApprovedCommandExecutor
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 from repofix.tools import LocalReadOnlyToolGateway
 
 
@@ -30,7 +30,7 @@ def run_reproduction_from_paths(
     ):
         raise ValueError("max_steps must be a strict integer from 1 through 20")
 
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     tools = LocalReadOnlyToolGateway(
         workspace_root=workspace_root,

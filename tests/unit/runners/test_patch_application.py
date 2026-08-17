@@ -54,7 +54,7 @@ def _configure_bundle(
             load_calls.append(path)
         return Bundle(patch_task)
 
-    monkeypatch.setattr(runner_module, "load_reproduction_task_bundle", load)
+    monkeypatch.setattr(runner_module, "load_evaluator_task_bundle", load)
     monkeypatch.setattr(
         runner_module,
         "compute_reproduction_expectation_fingerprint",

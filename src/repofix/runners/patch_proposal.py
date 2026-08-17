@@ -14,7 +14,7 @@ from repofix.patching import (
     validate_patch_workspace_reads,
 )
 from repofix.reproduction import compute_reproduction_expectation_fingerprint
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 class PatchProposalModel(Protocol):
@@ -28,7 +28,7 @@ def run_patch_proposal_from_paths(
     reproduction_result: ReproductionAgentRunResult,
     model: PatchProposalModel,
 ) -> ValidatedPatchProposal:
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     if not task.patchable_source_paths:
         raise ValueError("patch proposal task must configure patchable source paths")

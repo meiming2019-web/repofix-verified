@@ -11,7 +11,7 @@ from repofix.regression import (
     verify_post_patch_regression,
 )
 from repofix.reproduction import PostPatchReproductionResult
-from repofix.tasks import load_reproduction_task_bundle
+from repofix.tasks import load_evaluator_task_bundle
 
 
 def run_regression_verification_from_paths(
@@ -25,7 +25,7 @@ def run_regression_verification_from_paths(
     post_patch_reproduction_result: PostPatchReproductionResult,
 ) -> RegressionVerificationResult:
     """Load evaluator data and execute its post-patch regression command once."""
-    bundle = load_reproduction_task_bundle(task_path)
+    bundle = load_evaluator_task_bundle(task_path)
     task = bundle.agent_view()
     command_gateway = LocalApprovedCommandExecutor(
         workspace_root=workspace_root,

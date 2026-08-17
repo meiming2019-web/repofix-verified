@@ -99,7 +99,7 @@ def test_checked_in_fixture_runs_through_real_read_only_stack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository_root = Path(__file__).resolve().parents[3]
-    task_path = repository_root / "examples/tasks/empty-header-bug.yaml"
+    task_path = repository_root / "examples/evaluator/empty-header-bug/task.yaml"
     workspace = repository_root / "examples/fixtures/empty-header-bug"
     assert (workspace / "pytest.ini").read_text(encoding="utf-8") == (
         "[pytest]\npythonpath = src\ntestpaths = tests\n"
