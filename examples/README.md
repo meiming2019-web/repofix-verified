@@ -278,8 +278,30 @@ own stages; Final Evaluation defines no generic final `failed` or `inconclusive`
 
 Final Evaluation is pure aggregation over immutable artifacts. It executes no command, does not
 inspect the workspace, and does not use the evaluator's gold patch for candidate classification.
-Future `RunResult`, verified-resolution metrics, benchmark reporting, and stronger evaluator
-isolation may aggregate stopping stages and cohort outcomes, but are outside this milestone.
+## Repair experiment run artifacts
+
+Run artifacts record an externally orchestrated repair experiment without running or coordinating
+the pipeline themselves. A strict private record may retain raw operator evidence and exception
+messages. Its explicit public projection includes only path-independent run identity, aggregate
+model usage, ordered action kinds and derived counts, reached-stage statuses and fingerprints,
+sanitized error categories, and publishable candidate provenance. It never copies private evidence,
+hidden command data, evaluator specifications, response IDs, credentials, or arbitrary exception
+messages.
+
+Run outcomes distinguish authoritative workflow stops from `model_execution_blocked` and
+`system_error`. An unexpected operator, filesystem, or programmer exception is therefore not
+misreported as failure of the currently active evaluator gate. Existing stage results remain
+authoritative; the artifact models do not rerun or reinterpret their verifiers and do not define a
+generic failed Final Evaluation result.
+
+`examples/run_artifacts/attrs-670-run-001.json` is the sanitized public record of the first historical attrs
+#670 experiment. The external pilot did not record trustworthy start, finish, or per-stage timing,
+so those optional fields are left empty rather than reconstructed. The example contains the public
+candidate diff and aggregate usage, but no local workspace paths, API-key state, hidden evidence,
+policy specification, or gold data.
+
+Future verified-resolution metrics, benchmark reporting, full-pipeline orchestration, persistent
+storage, and stronger evaluator isolation remain outside this milestone.
 
 ## Troubleshooting
 

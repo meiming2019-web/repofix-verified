@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "run_id": "attrs-670-run-001",
+    "task_id": "attrs-670-custom-eq-autodetect",
+    "task_fingerprint": "7ee31a917dd4c531f1b07941007618576deb41255feb5abb12f3f61474986279",
+    "repository_url": "https://github.com/python-attrs/attrs.git",
+    "pre_fix_commit": "1a29941d5cf74ca585780495cb6c17fd013ec861",
+    "repofix_commit": "cb9d218264d829ffc81eca5123d6ee7e12a723f4",
+    "model_provider": "OpenAI Responses API",
+    "model_identifier": "gpt-5.6-sol",
+    "agent_workflow": "reproduction",
+    "timing": null
+  },
+  "outcome": "evaluator_passed",
+  "model_usage": {
+    "model_call_count": 8,
+    "input_tokens": 19863,
+    "output_tokens": 925,
+    "reasoning_tokens": 126,
+    "total_tokens": 20788,
+    "cached_tokens": 0,
+    "cache_write_tokens": 19839,
+    "configured_max_retries": 0,
+    "provider_retry_count": 0,
+    "structured_output_rejection_count": 0
+  },
+  "actions": [
+    {
+      "index": 1,
+      "kind": "understand_issue"
+    },
+    {
+      "index": 2,
+      "kind": "search_code"
+    },
+    {
+      "index": 3,
+      "kind": "read_file"
+    },
+    {
+      "index": 4,
+      "kind": "search_code"
+    },
+    {
+      "index": 5,
+      "kind": "read_file"
+    },
+    {
+      "index": 6,
+      "kind": "record_hypothesis"
+    },
+    {
+      "index": 7,
+      "kind": "run_approved_command"
+    }
+  ],
+  "stages": [
+    {
+      "stage": "reproduction",
+      "status": "reproduced",
+      "result_fingerprint": "2571d1308e00df1e351ffb6ae48d9bba11d157465cd067e1be22d893cd542aec",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "proposal",
+      "status": "structurally_validated_unapplied",
+      "result_fingerprint": null,
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "regression_baseline",
+      "status": "passed",
+      "result_fingerprint": "5711c303d74026c1652beab9176ab1324f1328fefa95ed61c9dac14e40da4bf8",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "application",
+      "status": "applied",
+      "result_fingerprint": "d516bfe47f8fb8d9e3d3171467e6ec7e614a3f4a9c57d68af1a388a9c3963108",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "post_patch_reproduction",
+      "status": "original_behavior_not_reproduced",
+      "result_fingerprint": "68e43f643d4ae25f57add7292f38766fb6c6e6338466b6bfb44b5d58e8929ee2",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "regression",
+      "status": "regression_command_passed",
+      "result_fingerprint": "1a2aa77a9778d6eecb58b390f18df8dc678973087717b15213bf33a46129caf4",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "hidden",
+      "status": "hidden_command_passed",
+      "result_fingerprint": "78c6c486951cfb8a881d255b51687bac3b6f402619b4f69aaefc33a9f287c956",
+      "finding_count": null,
+      "timing": null
+    },
+    {
+      "stage": "policy",
+      "status": "policy_passed",
+      "result_fingerprint": "2bb70329169107f956deecd4b8a53cf4e778f938deedf02d64cc879e54bfa5e6",
+      "finding_count": 0,
+      "timing": null
+    },
+    {
+      "stage": "final_evaluation",
+      "status": "evaluator_passed",
+      "result_fingerprint": null,
+      "finding_count": null,
+      "timing": null
+    }
+  ],
+  "candidate": {
+    "proposal_digest": "32cd0b5ed5d54230021907613ea251f8951b9946819bfe37d02cf2c7ee5ed6de",
+    "target_paths": [
+      "src/attr/_next_gen.py"
+    ],
+    "edit_count": 1,
+    "candidate_patch": "diff --git a/src/attr/_next_gen.py b/src/attr/_next_gen.py\nindex b0aefe3..57e8635 100644\n--- a/src/attr/_next_gen.py\n+++ b/src/attr/_next_gen.py\n@@ -28,7 +28,7 @@ def define(\n     kw_only=False,\n     cache_hash=False,\n     auto_exc=True,\n-    eq=True,\n+    eq=None,\n     order=False,\n     auto_detect=True,\n     getstate_setstate=None,\n",
+    "patch_omitted_for_safety": false,
+    "application_status": "applied"
+  },
+  "model_execution_block": null,
+  "action_counts": {
+    "repository_inspection_calls": 4,
+    "approved_command_requests": 1,
+    "total_agent_actions": 7,
+    "by_kind": [
+      {
+        "kind": "read_file",
+        "count": 2
+      },
+      {
+        "kind": "record_hypothesis",
+        "count": 1
+      },
+      {
+        "kind": "run_approved_command",
+        "count": 1
+      },
+      {
+        "kind": "search_code",
+        "count": 2
+      },
+      {
+        "kind": "understand_issue",
+        "count": 1
+      }
+    ]
+  },
+  "system_error": null
+}
