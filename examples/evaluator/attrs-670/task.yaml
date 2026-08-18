@@ -1,0 +1,131 @@
+task:
+  task_id: attrs-670-custom-eq-autodetect
+  repository_url: https://github.com/python-attrs/attrs.git
+  pre_fix_commit: 1a29941d5cf74ca585780495cb6c17fd013ec861
+  issue_title: "@attr.define fails to auto-detect custom __eq__"
+  issue_body: >-
+    A class decorated with @attr.define may define its own __eq__ implementation. With the
+    decorator's default behavior, attrs should auto-detect and preserve that user-defined
+    equality implementation. At this revision, generated equality behavior replaces or bypasses
+    the custom method. Normal classes that rely on generated equality must continue to behave
+    normally.
+  approved_commands:
+    reproduce-attrs-670:
+      argv:
+        - python
+        - -B
+        - -c
+        - |-
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd() / "src"))
+
+          import attr
+
+          print("PYTHON_EXECUTABLE=" + sys.executable)
+          print("CWD=" + os.getcwd())
+          print("ATTR_FILE=" + attr.__file__)
+          print("SYS_PATH_0=" + sys.path[0])
+
+
+          @attr.define
+          class Number:
+              value: int
+
+              def __eq__(self, other):
+                  if not isinstance(other, Number):
+                      return NotImplemented
+                  return self.value % 10 == other.value % 10
+
+
+          if Number(1) != Number(11):
+              print("REPOFIX_ATTRS_670_REPRODUCED")
+              raise SystemExit(1)
+
+          print("REPOFIX_ATTRS_670_NOT_REPRODUCED")
+    regression-next-gen-equality:
+      argv:
+        - python
+        - -B
+        - -c
+        - |-
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd() / "src"))
+
+          import attr
+          import pytest
+
+          print("PYTHON_EXECUTABLE=" + sys.executable)
+          print("ATTR_FILE=" + attr.__file__)
+          print("PYTEST_FILE=" + pytest.__file__)
+          print("PYTEST_VERSION=" + pytest.__version__)
+          raise SystemExit(pytest.main([
+              "-p",
+              "no:cacheprovider",
+              "-c",
+              "tox.ini",
+              "tests/test_next_gen.py::TestNextGen::test_auto_attribs_detect",
+          ]))
+  allowed_source_paths:
+    - src/attr
+    - tests
+  patchable_source_paths:
+    - src/attr
+  timeout_seconds: 300
+reproduction:
+  command_id: reproduce-attrs-670
+  expected_exit_codes:
+    - 1
+  required_fragments:
+    - fragment_id: attrs-670-reproduced
+      stream: stdout
+      text: REPOFIX_ATTRS_670_REPRODUCED
+  forbidden_fragments: []
+regression:
+  command_id: regression-next-gen-equality
+hidden_verification:
+  command_id: hidden-attrs-670
+  launcher:
+    argv:
+      - python
+      - -B
+  test_file:
+    path: hidden_tests/attrs_670_eq_contract.py
+    sha256: 94b133d28b5eae632063e7dc7a62b58887bce12c9fa39329ba66e5290f6f7a1b
+    size_bytes: 809
+patch_policy:
+  protected_files:
+    - path: conftest.py
+      sha256: 6e5426484ba175e1e7b3fe3ac275c1db5de96ef3344daa77043537f60eeee36f
+      size_bytes: 615
+    - path: tests/test_next_gen.py
+      sha256: 6b87e369fb90dfa3e7cc159b05e119ecb7789a17bdf93910d046d73fa8c1da84
+      size_bytes: 2816
+    - path: tox.ini
+      sha256: e441a6db42b9dce8b77bdb3f90ccf1a5db551a0d00e91fe391ada77d27f06a2b
+      size_bytes: 2988
+  forbidden_paths:
+    - pytest.ini
+    - setup.cfg
+    - sitecustomize.py
+    - tests/conftest.py
+    - usercustomize.py
+gold_patch:
+  patch: |-
+    diff --git a/src/attr/_next_gen.py b/src/attr/_next_gen.py
+    index b0aefe3..57e8635 100644
+    --- a/src/attr/_next_gen.py
+    +++ b/src/attr/_next_gen.py
+    @@ -28,7 +28,7 @@ def define(
+         kw_only=False,
+         cache_hash=False,
+         auto_exc=True,
+    -    eq=True,
+    +    eq=None,
+         order=False,
+         auto_detect=True,
+         getstate_setstate=None,

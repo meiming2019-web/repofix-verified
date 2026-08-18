@@ -1,4 +1,11 @@
-# Read-only investigation example
+# Evaluator examples
+
+`examples/evaluator/attrs-670` is the first formal real historical evaluator artifact. It uses the
+canonical evaluator bundle and portable logical commands for a caller-prepared attrs workspace and
+execution environment. It is curation data, not evidence of a successful AI repair; RepoFix does not
+provision or check out the historical repository.
+
+## Read-only investigation example
 
 This controlled example demonstrates the first manually runnable RepoFix investigation stack. It
 loads a checked-in task, lets a real model inspect a small fixture repository through bounded
