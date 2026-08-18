@@ -57,6 +57,13 @@ hidden_verification:
     path: hidden_tests/test_hidden.py
     sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     size_bytes: 12
+patch_policy:
+  protected_files:
+    - path: tests/protected.py
+      sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      size_bytes: 20
+  forbidden_paths:
+    - tests/conftest.py
 gold_patch:
   patch: |-
     diff --git a/file.py b/file.py
@@ -110,6 +117,10 @@ def test_loads_valid_evaluator_task_bundle(tmp_path: Path) -> None:
     assert bundle.task.task_id == "task-001"
     assert bundle.hidden_verification.command_id == "hidden_tests"
     assert bundle.hidden_verification.launcher.argv == ("pytest", "-q")
+    assert tuple(item.path for item in bundle.patch_policy.protected_files) == (
+        "tests/protected.py",
+    )
+    assert bundle.patch_policy.forbidden_paths == ("tests/conftest.py",)
     assert bundle.gold_patch.patch.startswith("diff --git")
 
 
@@ -222,8 +233,11 @@ def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Pat
     assert type(task) is AgentTaskSpec
     assert set(serialized) == set(AgentTaskSpec.model_fields)
     assert "hidden_verification" not in rendered
+    assert "patch_policy" not in rendered
     assert "gold_patch" not in rendered
     assert "hidden_tests/test_hidden.py" not in rendered
+    assert "tests/protected.py" not in rendered
+    assert "tests/conftest.py" not in rendered
     assert "diff --git" not in rendered
 
 
@@ -231,9 +245,10 @@ def test_complete_bundle_agent_loader_preserves_evaluator_boundary(tmp_path: Pat
     "evaluator_data",
     [
         "hidden_verification:\n  command_id: hidden\n",
+        "patch_policy:\n  protected_files: []\n",
         "gold_patch:\n  patch: secret patch\n",
     ],
-    ids=["hidden-verification", "gold-patch"],
+    ids=["hidden-verification", "patch-policy", "gold-patch"],
 )
 def test_agent_only_document_rejects_evaluator_fields(
     tmp_path: Path, evaluator_data: str
@@ -280,8 +295,11 @@ def test_agent_serialization_excludes_evaluator_data(tmp_path: Path) -> None:
 
     assert set(serialized) == set(AgentTaskSpec.model_fields)
     assert "hidden_verification" not in serialized
+    assert "patch_policy" not in serialized
     assert "gold_patch" not in serialized
     assert "hidden_tests/test_hidden.py" not in rendered
+    assert "tests/protected.py" not in rendered
+    assert "tests/conftest.py" not in rendered
     assert "diff --git" not in rendered
 
 

@@ -242,6 +242,21 @@ Execution remains POSIX-only, bounded, and not an OS security sandbox; repositor
 caller's operating-system permissions. Fresh evaluator workspaces, Docker isolation, and broader
 unexpected-change policy remain future evaluator milestones.
 
+## Protected workspace policy verification
+
+Passing behavioral verification does not by itself establish that proposal-external workspace files
+were preserved. Direct proposal targets are already structurally limited to evaluator-declared
+patchable source paths; this additional deterministic, model-free stage checks only the evaluator's
+declared protected workspace surface after reproduction, public regression, and hidden verification
+have all passed.
+
+Protected regular files must retain their curated SHA-256 and byte-size identity, while narrowly
+declared exact forbidden paths must remain absent. The policy stage runs no repository command, uses
+no Git diff or whole-repository snapshot, does not inspect arbitrary unprotected paths, and does not
+compare with the gold patch. `policy_passed` therefore means only that these declared surfaces were
+preserved; it is not a universal correctness or repair-success verdict. Semantic suspicious-code
+heuristics are deliberately deferred, and the Final Evaluator Verdict has not run.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

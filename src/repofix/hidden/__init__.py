@@ -10,6 +10,7 @@ from repofix.hidden.models import (
     HiddenVerificationResult,
     HiddenVerificationStatus,
     compute_hidden_specification_fingerprint,
+    compute_hidden_verification_fingerprint,
 )
 from repofix.hidden.verification import verify_hidden_behavior
 from repofix.tasks.spec import (
@@ -29,6 +30,7 @@ __all__ = [
     "HiddenVerificationStatus",
     "ResolvedHiddenCommand",
     "compute_hidden_specification_fingerprint",
+    "compute_hidden_verification_fingerprint",
     "resolve_hidden_command",
     "verify_hidden_behavior",
 ]

@@ -32,6 +32,19 @@ def compute_hidden_specification_fingerprint(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def compute_hidden_verification_fingerprint(
+    result: "HiddenVerificationResult",
+) -> str:
+    """Hash the complete hidden-verification result using canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class HiddenVerificationStatus(StrEnum):
     HIDDEN_COMMAND_PASSED = "hidden_command_passed"
     HIDDEN_COMMAND_FAILED = "hidden_command_failed"

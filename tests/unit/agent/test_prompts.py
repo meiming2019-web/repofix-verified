@@ -374,6 +374,13 @@ hidden_verification:
     path: hidden_tests/secret_hidden_test.py
     sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     size_bytes: 99
+patch_policy:
+  protected_files:
+    - path: tests/POLICY_SECRET_PROTECTED.py
+      sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      size_bytes: 77
+  forbidden_paths:
+    - POLICY_SECRET_FORBIDDEN.py
 gold_patch:
   patch: SECRET_GOLD_PATCH
 """,
@@ -397,6 +404,9 @@ gold_patch:
     assert "hidden-secret-command" not in user_prompt
     assert "hidden-secret-launcher" not in user_prompt
     assert "secret_hidden_test.py" not in user_prompt
+    assert "POLICY_SECRET_PROTECTED" not in user_prompt
+    assert "POLICY_SECRET_FORBIDDEN" not in user_prompt
+    assert "patch_policy" not in user_prompt
     assert "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" not in user_prompt
     assert "SECRET_GOLD_PATCH" not in user_prompt
 

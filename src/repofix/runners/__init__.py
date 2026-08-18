@@ -20,6 +20,7 @@ from repofix.runners.regression_verification import (
     run_regression_verification_from_paths,
 )
 from repofix.runners.hidden_verification import run_hidden_verification_from_paths
+from repofix.runners.policy_verification import run_policy_verification_from_paths
 
 __all__ = [
     "MAX_INVESTIGATION_STEPS",
@@ -31,6 +32,7 @@ __all__ = [
     "run_patch_application_from_paths",
     "run_patch_proposal_from_paths",
     "run_post_patch_reproduction_from_paths",
+    "run_policy_verification_from_paths",
     "run_reproduction_from_paths",
     "run_regression_baseline_from_paths",
     "run_regression_verification_from_paths",

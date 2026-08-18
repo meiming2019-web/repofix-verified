@@ -45,6 +45,9 @@ hidden_verification:
     path: hidden_tests/test_hidden.py
     sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     size_bytes: 12
+patch_policy:
+  protected_files: []
+  forbidden_paths: []
 gold_patch:
   patch: trusted-curation-patch
 """

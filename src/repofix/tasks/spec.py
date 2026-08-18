@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 _COMMAND_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+MAX_POLICY_PROTECTED_FILES = 64
+MAX_POLICY_FORBIDDEN_PATHS = 64
+MAX_POLICY_PROTECTED_FILE_BYTES = 1024 * 1024
 
 
 def validate_command_name(name: str) -> str:
@@ -210,6 +213,70 @@ class HiddenVerificationSpecification(StrictFrozenModel):
     @classmethod
     def validate_command_id(cls, value: str) -> str:
         return validate_command_name(value)
+
+
+class WorkspaceFileReference(StrictFrozenModel):
+    """One workspace-relative regular file with curated expected identity."""
+
+    path: str
+    sha256: str
+    size_bytes: int = Field(ge=0, le=MAX_POLICY_PROTECTED_FILE_BYTES)
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, value: str) -> str:
+        return validate_relative_source_path(value, description="protected workspace file path")
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        if not _SHA256_PATTERN.fullmatch(value):
+            raise ValueError("protected workspace file SHA-256 must be lowercase hexadecimal")
+        return value
+
+
+class PatchPolicySpecification(StrictFrozenModel):
+    """Evaluator-only protected workspace surface policy."""
+
+    protected_files: tuple[WorkspaceFileReference, ...] = Field(
+        max_length=MAX_POLICY_PROTECTED_FILES
+    )
+    forbidden_paths: tuple[str, ...] = Field(
+        default=(), max_length=MAX_POLICY_FORBIDDEN_PATHS
+    )
+
+    @field_validator("protected_files", "forbidden_paths", mode="before")
+    @classmethod
+    def normalize_containers(cls, value: object) -> tuple[object, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("policy path collections must be a list or tuple")
+        return tuple(value)
+
+    @field_validator("protected_files")
+    @classmethod
+    def validate_protected_files(
+        cls, values: tuple[WorkspaceFileReference, ...]
+    ) -> tuple[WorkspaceFileReference, ...]:
+        paths = tuple(item.path for item in values)
+        if len(paths) != len(set(paths)):
+            raise ValueError("protected workspace file paths must be unique")
+        return tuple(sorted(values, key=lambda item: item.path))
+
+    @field_validator("forbidden_paths")
+    @classmethod
+    def validate_forbidden_paths(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        for value in values:
+            validate_relative_source_path(value, description="forbidden workspace path")
+        if len(values) != len(set(values)):
+            raise ValueError("forbidden workspace paths must be unique")
+        return tuple(sorted(values))
+
+    @model_validator(mode="after")
+    def validate_disjoint_paths(self) -> Self:
+        protected = {item.path for item in self.protected_files}
+        if protected.intersection(self.forbidden_paths):
+            raise ValueError("workspace paths cannot be both protected and forbidden")
+        return self
 
 
 class GoldPatchSpec(StrictFrozenModel):

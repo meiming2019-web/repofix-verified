@@ -66,6 +66,17 @@ hidden_verification:
     path: hidden_tests/test_header_parser_hidden.py
     sha256: 9dcd8d63683013ffb949b6e9e5fde427fd78e6aa2c761a727e05662de6d978b6
     size_bytes: 259
+patch_policy:
+  protected_files:
+    - path: pytest.ini
+      sha256: d6e3e89cc6aab7944c11e4a14fb0a4db51c9ae36606bf263f47b7a9378f6de65
+      size_bytes: 44
+    - path: tests/test_header_parser.py
+      sha256: dc5f659f841798caec0c2386d899ced8db91efd15d34e9087ea4f1dbb5b9f261
+      size_bytes: 338
+  forbidden_paths:
+    - conftest.py
+    - tests/conftest.py
 gold_patch:
   patch: |-
     --- a/src/header_parser.py

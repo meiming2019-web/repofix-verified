@@ -9,6 +9,7 @@ from repofix.tasks.spec import (
     AgentTaskSpec,
     GoldPatchSpec,
     HiddenVerificationSpecification,
+    PatchPolicySpecification,
     RegressionSpecification,
     StrictFrozenModel,
 )
@@ -21,6 +22,7 @@ class EvaluatorTaskBundle(StrictFrozenModel):
     reproduction: ReproductionExpectation
     regression: RegressionSpecification
     hidden_verification: HiddenVerificationSpecification
+    patch_policy: PatchPolicySpecification
     gold_patch: GoldPatchSpec
 
     @model_validator(mode="after")

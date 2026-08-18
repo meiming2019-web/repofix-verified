@@ -9,7 +9,9 @@ from repofix.tasks.spec import (
     EvaluatorFileReference,
     GoldPatchSpec,
     HiddenVerificationSpecification,
+    PatchPolicySpecification,
     RegressionSpecification,
+    WorkspaceFileReference,
 )
 
 
@@ -54,7 +56,9 @@ __all__ = [
     "EvaluatorTaskBundle",
     "GoldPatchSpec",
     "HiddenVerificationSpecification",
+    "PatchPolicySpecification",
     "RegressionSpecification",
+    "WorkspaceFileReference",
     "TaskSpecLoadError",
     "load_agent_task_spec",
     "load_evaluator_task_bundle",

@@ -13,7 +13,9 @@ from repofix.tasks import (
     EvaluatorTaskBundle,
     GoldPatchSpec,
     HiddenVerificationSpecification,
+    PatchPolicySpecification,
     RegressionSpecification,
+    WorkspaceFileReference,
 )
 
 
@@ -57,6 +59,16 @@ def evaluator_bundle(task: AgentTaskSpec) -> EvaluatorTaskBundle:
                 sha256="a" * 64,
                 size_bytes=12,
             ),
+        ),
+        patch_policy=PatchPolicySpecification(
+            protected_files=(
+                WorkspaceFileReference(
+                    path="tests/protected.py",
+                    sha256="b" * 64,
+                    size_bytes=20,
+                ),
+            ),
+            forbidden_paths=("tests/conftest.py",),
         ),
         gold_patch=GoldPatchSpec(patch="diff --git a/file.py b/file.py\n"),
     )
@@ -350,13 +362,17 @@ def test_agent_view_excludes_evaluator_only_information() -> None:
     assert agent_view is task
     assert set(serialized) == set(AgentTaskSpec.model_fields)
     assert "hidden_verification" not in serialized
+    assert "patch_policy" not in serialized
     assert "gold_patch" not in serialized
     assert "hidden_tests" not in repr(serialized)
     assert "hidden_tests/test_hidden.py" not in repr(serialized)
+    assert "tests/protected.py" not in repr(serialized)
+    assert "tests/conftest.py" not in repr(serialized)
 
 
 @pytest.mark.parametrize(
-    "field", ["hidden_verification", "gold_patch", "reproduction", "regression"]
+    "field",
+    ["hidden_verification", "patch_policy", "gold_patch", "reproduction", "regression"],
 )
 def test_agent_task_rejects_evaluator_only_fields(field: str) -> None:
     data = valid_task_data()

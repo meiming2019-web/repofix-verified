@@ -19,6 +19,7 @@ from repofix.tasks import (
     EvaluatorFileReference,
     EvaluatorTaskBundle,
     GoldPatchSpec,
+    PatchPolicySpecification,
     RegressionSpecification,
 )
 from repofix.reproduction import ReproductionExpectation
@@ -124,6 +125,7 @@ def test_hidden_command_collision_is_rejected_without_affecting_task_fingerprint
             hidden_verification=specification().model_copy(
                 update={"command_id": "public"}
             ),
+            patch_policy=PatchPolicySpecification(protected_files=()),
             gold_patch=GoldPatchSpec(patch="diff"),
         )
     assert compute_task_fingerprint(task) == before
