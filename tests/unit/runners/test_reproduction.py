@@ -11,6 +11,7 @@ from repofix.agent import (
     ReproductionAgentRunResult,
 )
 from repofix.agent.reproduction_loop import compute_task_fingerprint
+from repofix.execution import LocalExecutionContext
 from repofix.reproduction import compute_reproduction_expectation_fingerprint
 from repofix.runners import run_reproduction_from_paths
 from repofix.tasks import AgentTaskSpec, TaskSpecLoadError
@@ -114,10 +115,27 @@ def test_runner_loads_bundle_and_builds_both_real_gateway_boundaries(
     assert isinstance(command_arguments, dict)
     assert command_arguments["workspace_root"] == workspace
     assert command_arguments["timeout_seconds"] == 300
+    assert "execution_context" not in command_arguments
     loop_arguments = captured["loop_arguments"]
     assert isinstance(loop_arguments, dict)
     assert loop_arguments["max_steps"] == 8
     assert "max_reproduction_attempts" not in loop_arguments
+
+    context = LocalExecutionContext(trusted_executable_dirs=(tmp_path / "toolchain",))
+    captured.clear()
+    run_reproduction_from_paths(
+        task_path=task_path,
+        workspace_root=workspace,
+        model=UnusedModel(),
+        max_steps=8,
+        execution_context=context,
+    )
+
+    context_command_arguments = captured["command_arguments"]
+    assert isinstance(context_command_arguments, dict)
+    assert context_command_arguments["execution_context"] is context
+    assert "execution_context" not in captured["tool_arguments"]
+    assert "execution_context" not in captured["loop_arguments"]
 
 
 def test_runner_multi_attempt_api_is_absent(tmp_path: Path) -> None:

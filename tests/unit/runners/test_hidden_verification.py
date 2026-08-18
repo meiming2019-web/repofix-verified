@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 import repofix.runners.hidden_verification as runner_module
+from repofix.execution import LocalExecutionContext
 from repofix.hidden import HiddenVerificationResult
 from repofix.tasks import AgentTaskSpec, ApprovedCommand
 
@@ -116,3 +117,25 @@ def test_runner_loads_and_resolves_once_then_executes_one_hidden_verification(
     assert set(HiddenVerificationResult.model_fields).isdisjoint(
         {"final_verdict", "resolved", "gold_patch"}
     )
+
+    context = LocalExecutionContext(trusted_executable_dirs=(tmp_path / "toolchain",))
+    load_calls.clear()
+    resolution_calls.clear()
+    executor_calls.clear()
+    verifier_calls.clear()
+    context_result = runner_module.run_hidden_verification_from_paths(
+        task_path=task_path,
+        workspace_root=workspace,
+        original_reproduction_result=prior[0],  # type: ignore[arg-type]
+        proposal=prior[1],  # type: ignore[arg-type]
+        baseline_result=prior[2],  # type: ignore[arg-type]
+        application_result=prior[3],  # type: ignore[arg-type]
+        post_patch_reproduction_result=prior[4],  # type: ignore[arg-type]
+        regression_verification_result=prior[5],  # type: ignore[arg-type]
+        execution_context=context,
+    )
+
+    assert context_result is sentinel
+    assert executor_calls[0]["execution_context"] is context
+    assert "execution_context" not in resolution_calls[0]
+    assert "execution_context" not in verifier_calls[0]

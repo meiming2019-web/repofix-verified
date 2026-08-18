@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Self
@@ -52,6 +53,21 @@ _CLOUD_CREDENTIAL_NAMES = {
     "AZURE_CLIENT_SECRET",
     "GOOGLE_APPLICATION_CREDENTIALS",
 }
+
+
+@dataclass(frozen=True)
+class LocalExecutionContext:
+    """Trusted runtime-only inputs for local command execution."""
+
+    trusted_executable_dirs: tuple[Path, ...] = ()
+
+
+@dataclass(frozen=True)
+class _TrustedExecutableDirectory:
+    """One logical trusted directory bound to its accepted canonical path."""
+
+    logical: Path
+    canonical: Path
 
 
 class ApprovedCommandExecutionError(RuntimeError):
@@ -161,14 +177,99 @@ def _is_sensitive_environment_name(name: str) -> bool:
     )
 
 
-def _trusted_executable_path(workspace_root: Path) -> str:
+def _validated_trusted_executable_dirs(
+    workspace_root: Path,
+    execution_context: LocalExecutionContext | None,
+) -> tuple[_TrustedExecutableDirectory, ...]:
+    if execution_context is None:
+        return ()
+    if not isinstance(execution_context, LocalExecutionContext):
+        raise ApprovedCommandExecutionError("local execution context has an invalid type")
+
+    trusted: list[_TrustedExecutableDirectory] = []
+    seen: set[Path] = set()
+    for candidate in execution_context.trusted_executable_dirs:
+        if not isinstance(candidate, Path):
+            raise ApprovedCommandExecutionError(
+                "trusted executable directories must be pathlib paths"
+            )
+        if not candidate.is_absolute():
+            raise ApprovedCommandExecutionError(
+                "trusted executable directories must be absolute"
+            )
+        if _is_within(workspace_root, candidate):
+            raise ApprovedCommandExecutionError(
+                "trusted executable directories must be outside the workspace"
+            )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except FileNotFoundError as error:
+            raise ApprovedCommandExecutionError(
+                "a trusted executable directory does not exist"
+            ) from error
+        except (OSError, RuntimeError) as error:
+            raise ApprovedCommandExecutionError(
+                "a trusted executable directory could not be resolved"
+            ) from error
+        if not resolved.is_dir():
+            raise ApprovedCommandExecutionError(
+                "trusted executable paths must be directories"
+            )
+        if _is_within(workspace_root, resolved):
+            raise ApprovedCommandExecutionError(
+                "trusted executable directories must resolve outside the workspace"
+            )
+        if resolved not in seen:
+            seen.add(resolved)
+            trusted.append(
+                _TrustedExecutableDirectory(logical=candidate, canonical=resolved)
+            )
+    return tuple(trusted)
+
+
+def _revalidate_trusted_executable_dirs(
+    workspace_root: Path,
+    trusted_executable_dirs: tuple[_TrustedExecutableDirectory, ...],
+) -> tuple[Path, ...]:
+    revalidated: list[Path] = []
+    for trusted in trusted_executable_dirs:
+        try:
+            resolved = trusted.logical.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ApprovedCommandExecutionError(
+                "a configured trusted executable directory is no longer valid"
+            ) from error
+        if not resolved.is_dir():
+            raise ApprovedCommandExecutionError(
+                "a configured trusted executable directory is no longer a directory"
+            )
+        if _is_within(workspace_root, resolved):
+            raise ApprovedCommandExecutionError(
+                "a configured trusted executable directory now resolves inside the workspace"
+            )
+        if resolved != trusted.canonical:
+            raise ApprovedCommandExecutionError(
+                "a configured trusted executable directory changed after validation"
+            )
+        revalidated.append(resolved)
+    return tuple(revalidated)
+
+
+def _trusted_executable_path(
+    workspace_root: Path,
+    trusted_executable_dirs: tuple[_TrustedExecutableDirectory, ...] = (),
+) -> str:
+    revalidated = _revalidate_trusted_executable_dirs(
+        workspace_root,
+        trusted_executable_dirs,
+    )
     candidates = [
         Path(sys.executable).parent,
         Path(sys.executable).resolve().parent,
         *(Path(entry) for entry in os.defpath.split(os.pathsep)),
     ]
-    trusted: list[str] = []
-    seen: set[Path] = set()
+    trusted = [str(path) for path in revalidated]
+    seen = set(revalidated)
     for candidate in candidates:
         if not candidate.is_absolute() or candidate == Path("."):
             continue
@@ -183,7 +284,11 @@ def _trusted_executable_path(workspace_root: Path) -> str:
     return os.pathsep.join(trusted)
 
 
-def _make_child_environment(support_root: Path, workspace_root: Path) -> dict[str, str]:
+def _make_child_environment(
+    support_root: Path,
+    workspace_root: Path,
+    trusted_executable_dirs: tuple[_TrustedExecutableDirectory, ...] = (),
+) -> dict[str, str]:
     environment: dict[str, str] = {}
     for name in _LOCALE_ENVIRONMENT_NAMES:
         if _is_sensitive_environment_name(name):
@@ -191,7 +296,10 @@ def _make_child_environment(support_root: Path, workspace_root: Path) -> dict[st
         value = os.environ.get(name)
         if value is not None:
             environment[name] = value
-    environment["PATH"] = _trusted_executable_path(workspace_root)
+    environment["PATH"] = _trusted_executable_path(
+        workspace_root,
+        trusted_executable_dirs,
+    )
     home = support_root / "home"
     cache = support_root / "cache"
     temporary = support_root / "tmp"
@@ -315,6 +423,7 @@ class LocalApprovedCommandExecutor:
         workspace_root: Path,
         approved_commands: Mapping[str, ApprovedCommand],
         timeout_seconds: int,
+        execution_context: LocalExecutionContext | None = None,
     ) -> None:
         try:
             resolved_workspace = workspace_root.resolve(strict=True)
@@ -338,6 +447,10 @@ class LocalApprovedCommandExecutor:
         self._workspace_root = resolved_workspace
         self._approved_commands = dict(approved_commands)
         self._timeout_seconds = min(timeout_seconds, MAX_COMMAND_TIMEOUT_SECONDS)
+        self._trusted_executable_dirs = _validated_trusted_executable_dirs(
+            resolved_workspace,
+            execution_context,
+        )
 
     def execute(self, command_id: str) -> ApprovedCommandExecutionResult:
         """Execute the exact argv configured for one trusted command ID."""
@@ -359,7 +472,15 @@ class LocalApprovedCommandExecutor:
             ) from error
         try:
             support_root = Path(support_directory.name)
-            environment = _make_child_environment(support_root, self._workspace_root)
+            environment = _make_child_environment(
+                support_root,
+                self._workspace_root,
+                self._trusted_executable_dirs,
+            )
+            _revalidate_trusted_executable_dirs(
+                self._workspace_root,
+                self._trusted_executable_dirs,
+            )
             process = self._start_process(command, environment)
             return self._execute_started_process(command_id, command, process)
         finally:

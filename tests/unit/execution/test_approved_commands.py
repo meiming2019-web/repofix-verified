@@ -1,5 +1,6 @@
 """Tests for deterministic, bounded approved-command execution."""
 
+from dataclasses import FrozenInstanceError
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ from repofix.execution import (
     ApprovedCommandExecutionResult,
     CommandTerminationReason,
     LocalApprovedCommandExecutor,
+    LocalExecutionContext,
 )
 from repofix.tasks import ApprovedCommand
 
@@ -31,12 +33,14 @@ def executor(
     approved_commands: dict[str, ApprovedCommand] | None = None,
     *,
     timeout_seconds: int = 10,
+    execution_context: LocalExecutionContext | None = None,
 ) -> LocalApprovedCommandExecutor:
     return LocalApprovedCommandExecutor(
         workspace_root=workspace,
         approved_commands=approved_commands
         or {"test": command(sys.executable, "-c", "print('ok')")},
         timeout_seconds=timeout_seconds,
+        execution_context=execution_context,
     )
 
 
@@ -153,6 +157,312 @@ def test_unsupported_host_is_rejected_before_support_or_process_start(
 
     assert temporary_created is False
     assert process_started is False
+
+
+def test_local_execution_context_is_immutable(tmp_path: Path) -> None:
+    context = LocalExecutionContext(trusted_executable_dirs=(tmp_path,))
+
+    with pytest.raises(FrozenInstanceError):
+        context.trusted_executable_dirs = ()
+
+
+def test_trusted_external_directory_precedes_default_path_and_preserves_logical_argv(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    trusted_bin = tmp_path / "trusted-bin"
+    workspace.mkdir()
+    trusted_bin.mkdir()
+    physical_python = trusted_bin / "python"
+    physical_python.write_text("#!/bin/sh\nprintf 'trusted-python\\n'\n", encoding="utf-8")
+    physical_python.chmod(0o700)
+    approved = command("python", "-B", "-c", "print('wrong interpreter')")
+
+    result = executor(
+        workspace,
+        {"test": approved},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    ).execute("test")
+
+    assert result.stdout == "trusted-python\n"
+    assert result.argv == approved.argv
+    assert result.argv[0] == "python"
+    assert str(physical_python) not in result.argv
+
+
+def test_empty_execution_context_preserves_default_path(tmp_path: Path) -> None:
+    code = "import os; print(os.environ['PATH'])"
+    approved = {"test": command(sys.executable, "-c", code)}
+
+    default_result = executor(tmp_path, approved).execute("test")
+    empty_result = executor(
+        tmp_path,
+        approved,
+        execution_context=LocalExecutionContext(),
+    ).execute("test")
+
+    assert empty_result.stdout == default_result.stdout
+
+
+def test_trusted_directory_order_and_resolved_deduplication(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    first = tmp_path / "first-bin"
+    second = tmp_path / "second-bin"
+    alias = tmp_path / "first-alias"
+    workspace.mkdir()
+    first.mkdir()
+    second.mkdir()
+    try:
+        alias.symlink_to(first, target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are not supported on this host: {error}")
+    code = "import os; print(os.environ['PATH'])"
+
+    result = executor(
+        workspace,
+        {"test": command(sys.executable, "-c", code)},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(alias, second, first)
+        ),
+    ).execute("test")
+    entries = result.stdout.strip().split(os.pathsep)
+
+    assert entries[:2] == [str(first.resolve()), str(second.resolve())]
+    assert entries.count(str(first.resolve())) == 1
+
+
+def test_trusted_directory_allows_venv_style_executable_symlink(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    trusted_bin = tmp_path / "trusted-bin"
+    workspace.mkdir()
+    trusted_bin.mkdir()
+    physical = trusted_bin / "python3"
+    physical.write_text("#!/bin/sh\nprintf 'symlinked-python\\n'\n", encoding="utf-8")
+    physical.chmod(0o700)
+    try:
+        (trusted_bin / "python").symlink_to("python3")
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are not supported on this host: {error}")
+
+    result = executor(
+        workspace,
+        {"test": command("python")},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    ).execute("test")
+
+    assert result.stdout == "symlinked-python\n"
+    assert result.argv == ("python",)
+
+
+def test_trusted_path_does_not_restore_ambient_execution_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    trusted_bin = tmp_path / "trusted-bin"
+    workspace.mkdir()
+    trusted_bin.mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "untrusted-parent-bin"))
+    monkeypatch.setenv("VIRTUAL_ENV", "/private/untrusted-parent-venv")
+    monkeypatch.setenv("PYTHONPATH", "/private/untrusted-pythonpath")
+    code = (
+        "import json, os; "
+        "print(json.dumps({name: os.environ.get(name) "
+        "for name in ('PATH', 'VIRTUAL_ENV', 'PYTHONPATH')}))"
+    )
+
+    result = executor(
+        workspace,
+        {"test": command(sys.executable, "-c", code)},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    ).execute("test")
+    environment = json.loads(result.stdout)
+
+    assert environment["PATH"].split(os.pathsep)[0] == str(trusted_bin.resolve())
+    assert "untrusted-parent-bin" not in environment["PATH"]
+    assert environment["VIRTUAL_ENV"] is None
+    assert environment["PYTHONPATH"] is None
+
+
+def test_rejects_invalid_trusted_executable_directories(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    missing = tmp_path / "missing-bin"
+    regular_file = tmp_path / "bin-file"
+    regular_file.write_text("not a directory", encoding="utf-8")
+
+    invalid = (
+        (Path("relative-bin"), "absolute"),
+        (missing, "does not exist"),
+        (regular_file, "must be directories"),
+        (workspace, "outside the workspace"),
+    )
+    for candidate, message in invalid:
+        with pytest.raises(ApprovedCommandExecutionError, match=message):
+            executor(
+                workspace,
+                execution_context=LocalExecutionContext(
+                    trusted_executable_dirs=(candidate,)
+                ),
+            )
+
+
+def test_rejects_trusted_directory_aliases_crossing_workspace_boundary(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    external = tmp_path / "external-bin"
+    workspace.mkdir()
+    external.mkdir()
+    inside_alias = workspace / "external-alias"
+    external_alias = tmp_path / "workspace-alias"
+    try:
+        inside_alias.symlink_to(external, target_is_directory=True)
+        external_alias.symlink_to(workspace, target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are not supported on this host: {error}")
+
+    with pytest.raises(ApprovedCommandExecutionError, match="outside the workspace"):
+        executor(
+            workspace,
+            execution_context=LocalExecutionContext(
+                trusted_executable_dirs=(inside_alias,)
+            ),
+        )
+    with pytest.raises(
+        ApprovedCommandExecutionError,
+        match="resolve outside the workspace",
+    ):
+        executor(
+            workspace,
+            execution_context=LocalExecutionContext(
+                trusted_executable_dirs=(external_alias,)
+            ),
+        )
+
+
+def test_removed_configured_trusted_directory_fails_closed_before_process_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    trusted_bin = tmp_path / "trusted-bin"
+    workspace.mkdir()
+    trusted_bin.mkdir()
+    command_executor = executor(
+        workspace,
+        {"test": command("python", "-c", "print('must not run')")},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    )
+    trusted_bin.rmdir()
+    process_started = False
+
+    def fail_process_start(*args: object, **kwargs: object) -> object:
+        nonlocal process_started
+        process_started = True
+        raise AssertionError("process must not start after trusted directory removal")
+
+    monkeypatch.setattr(command_executor, "_start_process", fail_process_start)
+
+    with pytest.raises(
+        ApprovedCommandExecutionError,
+        match="trusted executable directory is no longer valid",
+    ) as caught:
+        command_executor.execute("test")
+
+    assert process_started is False
+    assert str(tmp_path) not in str(caught.value)
+
+
+def test_configured_trusted_directory_redirected_into_workspace_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace_bin = workspace / "bin"
+    trusted_bin = tmp_path / "trusted-bin"
+    displaced = tmp_path / "displaced-bin"
+    workspace_bin.mkdir(parents=True)
+    trusted_bin.mkdir()
+    command_executor = executor(
+        workspace,
+        {"test": command("python", "-c", "print('must not run')")},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    )
+    trusted_bin.rename(displaced)
+    try:
+        trusted_bin.symlink_to(workspace_bin, target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are not supported on this host: {error}")
+    process_started = False
+
+    def fail_process_start(*args: object, **kwargs: object) -> object:
+        nonlocal process_started
+        process_started = True
+        raise AssertionError("process must not start after trusted directory redirect")
+
+    monkeypatch.setattr(command_executor, "_start_process", fail_process_start)
+
+    with pytest.raises(
+        ApprovedCommandExecutionError,
+        match="trusted executable directory now resolves inside the workspace",
+    ) as caught:
+        command_executor.execute("test")
+
+    assert process_started is False
+    assert str(tmp_path) not in str(caught.value)
+
+
+def test_configured_trusted_directory_redirected_externally_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    trusted_bin = tmp_path / "trusted-bin"
+    displaced = tmp_path / "displaced-bin"
+    replacement = tmp_path / "replacement-bin"
+    workspace.mkdir()
+    trusted_bin.mkdir()
+    replacement.mkdir()
+    command_executor = executor(
+        workspace,
+        {"test": command("python", "-c", "print('must not run')")},
+        execution_context=LocalExecutionContext(
+            trusted_executable_dirs=(trusted_bin,)
+        ),
+    )
+    trusted_bin.rename(displaced)
+    try:
+        trusted_bin.symlink_to(replacement, target_is_directory=True)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symbolic links are not supported on this host: {error}")
+
+    def fail_process_start(*args: object, **kwargs: object) -> object:
+        raise AssertionError("process must not start after trusted directory redirect")
+
+    monkeypatch.setattr(command_executor, "_start_process", fail_process_start)
+
+    with pytest.raises(
+        ApprovedCommandExecutionError,
+        match="trusted executable directory changed after validation",
+    ) as caught:
+        command_executor.execute("test")
+
+    assert str(tmp_path) not in str(caught.value)
 
 
 def test_success_and_nonzero_exit_are_completed_results(tmp_path: Path) -> None:

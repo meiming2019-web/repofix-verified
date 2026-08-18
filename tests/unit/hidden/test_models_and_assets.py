@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from repofix.agent.reproduction_loop import compute_task_fingerprint
+from repofix.execution import LocalExecutionContext
 from repofix.hidden import (
     HiddenVerificationError,
     HiddenVerificationSpecification,
@@ -56,6 +57,31 @@ def test_hidden_specification_is_strict_frozen_and_fingerprint_is_field_sensitiv
         HiddenVerificationSpecification.model_validate(
             {**item.model_dump(), "extra": "forbidden"}
         )
+
+
+def test_runtime_execution_context_is_absent_from_hidden_identity_and_schema(
+    tmp_path: Path,
+) -> None:
+    item = specification()
+    runtime_paths = (tmp_path / "toolchain-one", tmp_path / "toolchain-two")
+    contexts = tuple(
+        LocalExecutionContext(trusted_executable_dirs=(path,))
+        for path in runtime_paths
+    )
+
+    fingerprints = tuple(
+        compute_hidden_specification_fingerprint(item) for _context in contexts
+    )
+    serialized = item.model_dump_json()
+    schema = HiddenVerificationSpecification.model_json_schema()
+
+    assert fingerprints[0] == fingerprints[1]
+    assert item.launcher.argv == ("pytest", "-q", "--rootdir", ".")
+    assert "execution_context" not in serialized
+    assert "trusted_executable_dirs" not in serialized
+    assert all(str(path) not in serialized for path in runtime_paths)
+    assert "execution_context" not in repr(schema)
+    assert "trusted_executable_dirs" not in repr(schema)
 
 
 @pytest.mark.parametrize(

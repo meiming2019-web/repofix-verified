@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from repofix.agent.reproduction_loop import ReproductionAgentRunResult
-from repofix.execution import LocalApprovedCommandExecutor
+from repofix.execution import LocalApprovedCommandExecutor, LocalExecutionContext
 from repofix.hidden import (
     HiddenVerificationResult,
     resolve_hidden_command,
@@ -25,6 +25,7 @@ def run_hidden_verification_from_paths(
     application_result: PatchApplicationResult,
     post_patch_reproduction_result: PostPatchReproductionResult,
     regression_verification_result: RegressionVerificationResult,
+    execution_context: LocalExecutionContext | None = None,
 ) -> HiddenVerificationResult:
     """Load evaluator data and execute its singleton hidden command once."""
     bundle = load_evaluator_task_bundle(task_path)
@@ -34,11 +35,19 @@ def run_hidden_verification_from_paths(
         evaluator_assets_root=task_path.parent,
         specification=bundle.hidden_verification,
     )
-    command_gateway = LocalApprovedCommandExecutor(
-        workspace_root=workspace_root,
-        approved_commands={resolution.command_id: resolution.command},
-        timeout_seconds=task.timeout_seconds,
-    )
+    if execution_context is None:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands={resolution.command_id: resolution.command},
+            timeout_seconds=task.timeout_seconds,
+        )
+    else:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands={resolution.command_id: resolution.command},
+            timeout_seconds=task.timeout_seconds,
+            execution_context=execution_context,
+        )
     return verify_hidden_behavior(
         workspace_root=workspace_root,
         task=task,

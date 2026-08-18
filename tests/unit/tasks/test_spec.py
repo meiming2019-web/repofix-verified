@@ -1,10 +1,13 @@
 """Tests for validated task specification models."""
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+from repofix.agent.reproduction_loop import compute_task_fingerprint
+from repofix.execution import LocalExecutionContext
 from repofix.reproduction import ReproductionExpectation
 from repofix.tasks import (
     AgentTaskSpec,
@@ -368,6 +371,33 @@ def test_agent_view_excludes_evaluator_only_information() -> None:
     assert "hidden_tests/test_hidden.py" not in repr(serialized)
     assert "tests/protected.py" not in repr(serialized)
     assert "tests/conftest.py" not in repr(serialized)
+
+
+def test_runtime_execution_context_is_absent_from_task_identity_and_artifacts(
+    tmp_path: Path,
+) -> None:
+    task = AgentTaskSpec.model_validate(valid_task_data())
+    bundle = evaluator_bundle(task)
+    runtime_paths = (tmp_path / "toolchain-one", tmp_path / "toolchain-two")
+    contexts = tuple(
+        LocalExecutionContext(trusted_executable_dirs=(path,))
+        for path in runtime_paths
+    )
+
+    fingerprints = tuple(compute_task_fingerprint(task) for _context in contexts)
+    agent_serialized = bundle.agent_view().model_dump_json()
+    bundle_serialized = bundle.model_dump_json()
+    schemas = (AgentTaskSpec.model_json_schema(), EvaluatorTaskBundle.model_json_schema())
+
+    assert fingerprints[0] == fingerprints[1]
+    assert "execution_context" not in agent_serialized
+    assert "trusted_executable_dirs" not in agent_serialized
+    assert "execution_context" not in bundle_serialized
+    assert "trusted_executable_dirs" not in bundle_serialized
+    assert all(str(path) not in agent_serialized for path in runtime_paths)
+    assert all(str(path) not in bundle_serialized for path in runtime_paths)
+    assert all("execution_context" not in repr(schema) for schema in schemas)
+    assert all("trusted_executable_dirs" not in repr(schema) for schema in schemas)
 
 
 @pytest.mark.parametrize(

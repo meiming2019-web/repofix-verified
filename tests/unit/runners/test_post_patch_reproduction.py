@@ -7,7 +7,7 @@ import pytest
 
 import repofix.runners.post_patch_reproduction as runner_module
 from repofix.agent.reproduction_loop import compute_task_fingerprint
-from repofix.execution import ApprovedCommandExecutionError
+from repofix.execution import ApprovedCommandExecutionError, LocalExecutionContext
 from repofix.patching import PatchApplicationStatus
 from repofix.reproduction import (
     POST_PATCH_NOT_REPRODUCED_SUMMARY,
@@ -138,6 +138,23 @@ def test_runner_loads_bundle_constructs_gateway_once_and_verifies_once(
     assert len(verification_calls) == 1
     assert "model" not in verification_calls[0]
     assert "apply_validated_patch_proposal" not in verification_calls[0]
+
+    context = LocalExecutionContext(trusted_executable_dirs=(tmp_path / "toolchain",))
+    loads.clear()
+    gateway_arguments.clear()
+    verification_calls.clear()
+    context_result = runner_module.run_post_patch_reproduction_from_paths(
+        task_path=task_path,
+        workspace_root=workspace,
+        original_reproduction_result=reproduction_result,  # type: ignore[arg-type]
+        proposal=proposal,  # type: ignore[arg-type]
+        application_result=application,  # type: ignore[arg-type]
+        execution_context=context,
+    )
+
+    assert context_result is expected
+    assert gateway_arguments[0]["execution_context"] is context
+    assert "execution_context" not in verification_calls[0]
 
 
 def test_runner_rejects_current_expectation_mismatch_before_gateway(

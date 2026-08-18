@@ -7,7 +7,7 @@ from repofix.agent.reproduction_loop import (
     ReproductionAgentRunResult,
     run_reproduction_agent_loop,
 )
-from repofix.execution import LocalApprovedCommandExecutor
+from repofix.execution import LocalApprovedCommandExecutor, LocalExecutionContext
 from repofix.tasks import load_evaluator_task_bundle
 from repofix.tools import LocalReadOnlyToolGateway
 
@@ -21,6 +21,7 @@ def run_reproduction_from_paths(
     workspace_root: Path,
     model: AgentModel,
     max_steps: int,
+    execution_context: LocalExecutionContext | None = None,
 ) -> ReproductionAgentRunResult:
     """Load an evaluator bundle and run reproduction in a prepared workspace."""
     if (
@@ -36,11 +37,19 @@ def run_reproduction_from_paths(
         workspace_root=workspace_root,
         allowed_source_paths=task.allowed_source_paths,
     )
-    command_gateway = LocalApprovedCommandExecutor(
-        workspace_root=workspace_root,
-        approved_commands=task.approved_commands,
-        timeout_seconds=task.timeout_seconds,
-    )
+    if execution_context is None:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands=task.approved_commands,
+            timeout_seconds=task.timeout_seconds,
+        )
+    else:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands=task.approved_commands,
+            timeout_seconds=task.timeout_seconds,
+            execution_context=execution_context,
+        )
     return run_reproduction_agent_loop(
         task=task,
         expectation=bundle.reproduction,

@@ -6,7 +6,7 @@ from repofix.agent.reproduction_loop import (
     ReproductionAgentRunResult,
     compute_task_fingerprint,
 )
-from repofix.execution import LocalApprovedCommandExecutor
+from repofix.execution import LocalApprovedCommandExecutor, LocalExecutionContext
 from repofix.patching import PatchApplicationResult, ValidatedPatchProposal
 from repofix.reproduction.post_patch import (
     PostPatchReproductionResult,
@@ -23,6 +23,7 @@ def run_post_patch_reproduction_from_paths(
     original_reproduction_result: ReproductionAgentRunResult,
     proposal: ValidatedPatchProposal,
     application_result: PatchApplicationResult,
+    execution_context: LocalExecutionContext | None = None,
 ) -> PostPatchReproductionResult:
     """Load the current bundle and rerun its reproduction command exactly once."""
     bundle = load_evaluator_task_bundle(task_path)
@@ -37,11 +38,19 @@ def run_post_patch_reproduction_from_paths(
         != expectation_fingerprint
     ):
         raise ValueError("original reproduction result expectation fingerprint does not match")
-    command_gateway = LocalApprovedCommandExecutor(
-        workspace_root=workspace_root,
-        approved_commands=task.approved_commands,
-        timeout_seconds=task.timeout_seconds,
-    )
+    if execution_context is None:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands=task.approved_commands,
+            timeout_seconds=task.timeout_seconds,
+        )
+    else:
+        command_gateway = LocalApprovedCommandExecutor(
+            workspace_root=workspace_root,
+            approved_commands=task.approved_commands,
+            timeout_seconds=task.timeout_seconds,
+            execution_context=execution_context,
+        )
     return verify_post_patch_reproduction(
         workspace_root=workspace_root,
         task=task,

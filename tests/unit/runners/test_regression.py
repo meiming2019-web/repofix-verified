@@ -7,7 +7,7 @@ import pytest
 
 import repofix.runners.regression_baseline as baseline_runner
 import repofix.runners.regression_verification as verification_runner
-from repofix.execution import ApprovedCommandExecutionError
+from repofix.execution import ApprovedCommandExecutionError, LocalExecutionContext
 from repofix.regression import RegressionSpecification
 from repofix.tasks import AgentTaskSpec
 
@@ -101,10 +101,22 @@ def test_runner_loads_once_constructs_one_gateway_and_calls_once(
     assert result is expected
     assert loads == [task_path]
     assert len(gateway_arguments) == 1
+    assert "execution_context" not in gateway_arguments[0]
     assert len(calls) == 1
     assert "model" not in calls[0]
     assert "hidden_tests" not in calls[0]
     assert "apply_validated_patch_proposal" not in calls[0]
+
+    context = LocalExecutionContext(trusted_executable_dirs=(tmp_path / "toolchain",))
+    loads.clear()
+    gateway_arguments.clear()
+    calls.clear()
+    arguments["execution_context"] = context
+    context_result = getattr(module, runner_name)(**arguments)
+
+    assert context_result is expected
+    assert gateway_arguments[0]["execution_context"] is context
+    assert "execution_context" not in calls[0]
 
 
 @pytest.mark.parametrize(
