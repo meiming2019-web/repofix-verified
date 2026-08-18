@@ -1,9 +1,10 @@
 # Evaluator examples
 
-`examples/evaluator/attrs-670` is the first formal real historical evaluator artifact. It uses the
-canonical evaluator bundle and portable logical commands for a caller-prepared attrs workspace and
-execution environment. It is curation data, not evidence of a successful AI repair; RepoFix does not
-provision or check out the historical repository.
+`examples/evaluator/attrs-670` is the first formal real historical evaluator artifact.
+`examples/evaluator/click-3458` is the second, covering Click parameter-source availability during
+custom type conversion. Both use the canonical evaluator bundle and portable logical commands for a
+caller-prepared workspace and execution environment. They are curation data, not evidence of a
+successful AI repair; RepoFix does not provision or check out historical repositories.
 
 ## Read-only investigation example
 

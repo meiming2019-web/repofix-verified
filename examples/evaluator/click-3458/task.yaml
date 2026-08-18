@@ -1,0 +1,187 @@
+task:
+  task_id: click-3458-parameter-source-during-conversion
+  repository_url: https://github.com/pallets/click.git
+  pre_fix_commit: 4b24a6c8f6658ef89fd6db4dcaf8ee88eef75dfa
+  issue_title: "`get_parameter_source()` returns `None` in 8.4.0"
+  issue_body: >-
+    During Click parameter type conversion, get_parameter_source() can return None even though
+    Click has already determined whether the value came from a default or the command line. A
+    custom ParamType should be able to inspect that source consistently during conversion. Normal
+    option parsing and parameter-source reporting must continue to behave correctly.
+  approved_commands:
+    reproduce-click-3458:
+      argv:
+        - python
+        - -B
+        - -c
+        - |-
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd() / "src"))
+
+          import click
+          from click.testing import CliRunner
+
+          click_file = Path(click.__file__).resolve()
+          workspace_package = (Path.cwd() / "src/click").resolve()
+          print("PYTHON_EXECUTABLE=" + sys.executable)
+          print("CLICK_FILE=" + click.__file__)
+          if not click_file.is_relative_to(workspace_package):
+              print("REPOFIX_CLICK_3458_PROVENANCE_ERROR")
+              raise SystemExit(2)
+
+
+          class Source(click.ParamType):
+              name = "source"
+
+              def convert(self, value, param, ctx):
+                  return ctx.get_parameter_source(param.name)
+
+
+          @click.command()
+          @click.option("--default", type=Source(), default="fallback")
+          @click.option("--nodefault", type=Source())
+          def cli(default, nodefault):
+              def source_name(source):
+                  return "NONE" if source is None else source.name
+
+              click.echo(
+                  f"default={source_name(default)} nodefault={source_name(nodefault)}"
+              )
+
+
+          cases = (
+              ([], "default=DEFAULT nodefault=NONE"),
+              (
+                  ["--default", "cli", "--nodefault", "also"],
+                  "default=COMMANDLINE nodefault=COMMANDLINE",
+              ),
+          )
+          failed = False
+          for args, expected in cases:
+              result = CliRunner().invoke(cli, args)
+              if result.exit_code != 0 or result.output.strip() != expected:
+                  failed = True
+
+          if failed:
+              print("REPOFIX_CLICK_3458_REPRODUCED")
+              raise SystemExit(1)
+
+          print("REPOFIX_CLICK_3458_NOT_REPRODUCED")
+    regression-parameter-source:
+      argv:
+        - python
+        - -B
+        - -c
+        - |-
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path.cwd() / "src"))
+
+          import click
+          import pytest
+
+          click_file = Path(click.__file__).resolve()
+          workspace_package = (Path.cwd() / "src/click").resolve()
+          print("PYTHON_EXECUTABLE=" + sys.executable)
+          print("CLICK_FILE=" + click.__file__)
+          print("PYTEST_FILE=" + pytest.__file__)
+          print("PYTEST_VERSION=" + pytest.__version__)
+          if not click_file.is_relative_to(workspace_package):
+              print("REPOFIX_CLICK_3458_PROVENANCE_ERROR")
+              raise SystemExit(2)
+          raise SystemExit(pytest.main([
+              "-p",
+              "no:cacheprovider",
+              "-c",
+              "pyproject.toml",
+              "tests/test_context.py::test_parameter_source",
+          ]))
+  allowed_source_paths:
+    - src/click
+    - tests
+  patchable_source_paths:
+    - src/click
+  timeout_seconds: 300
+reproduction:
+  command_id: reproduce-click-3458
+  expected_exit_codes:
+    - 1
+  required_fragments:
+    - fragment_id: click-3458-reproduced
+      stream: stdout
+      text: REPOFIX_CLICK_3458_REPRODUCED
+  forbidden_fragments: []
+regression:
+  command_id: regression-parameter-source
+hidden_verification:
+  command_id: hidden-click-3458
+  launcher:
+    argv:
+      - python
+      - -B
+  test_file:
+    path: hidden_tests/click_3458_parameter_source_contract.py
+    sha256: 9a602075d024e3fc98fb241e161658bb041eb57ad7572fffc9d1f593917bfdce
+    size_bytes: 1610
+patch_policy:
+  protected_files:
+    - path: pyproject.toml
+      sha256: f9a2bc31f584a32f88b9d9bcaf7c34bf8ab714eaf124b01b714b0394ca0f327b
+      size_bytes: 5516
+    - path: tests/conftest.py
+      sha256: 192be82444d6048fd222e2d73cd5c3bec768d65c6e10c0ffc230f307f363590b
+      size_bytes: 131
+    - path: tests/test_context.py
+      sha256: 187b7b8f9b1e666af21629c93d69702239b06a8ecd4840b83ede37e7cc32adcf
+      size_bytes: 23042
+  forbidden_paths:
+    - conftest.py
+    - pytest.ini
+    - setup.cfg
+    - sitecustomize.py
+    - tests/pytest.ini
+    - tests/setup.cfg
+    - tests/sitecustomize.py
+    - tests/tox.ini
+    - tests/usercustomize.py
+    - tox.ini
+    - usercustomize.py
+gold_patch:
+  patch: |-
+    diff --git a/src/click/core.py b/src/click/core.py
+    index 3544c03..3944bb4 100644
+    --- a/src/click/core.py
+    +++ b/src/click/core.py
+    @@ -2609,6 +2609,11 @@ class Parameter(ABC):
+             with augment_usage_errors(ctx, param=self):
+                 value, source = self.consume_value(ctx, opts)
+
+    +            # Record the source before processing so eager callbacks and type
+    +            # conversion can inspect it. Restored after arbitration if this
+    +            # option loses a feature-switch group.
+    +            ctx.set_parameter_source(self.name, source)
+    +
+                 # Display a deprecation warning if necessary.
+                 if (
+                     self.deprecated
+    @@ -2654,14 +2659,13 @@ class Parameter(ABC):
+             )
+
+             if is_winner:
+    -            ctx.set_parameter_source(self.name, source)
+                 if self.expose_value:
+                     ctx.params[self.name] = value
+                     ctx._param_default_explicit[self.name] = self._default_explicit
+    -        elif existing_source is None:
+    -            # Nothing has claimed the slot yet. Record at least our source so downstream
+    -            # lookups don't return ``None``.
+    -            ctx.set_parameter_source(self.name, source)
+    +        elif existing_source is not None:
+    +            # Lost arbitration; restore the winning option's source.
+    +            ctx.set_parameter_source(self.name, existing_source)
+    +        # else: keep the provisional source recorded before process_value.
+
+             return value, args
