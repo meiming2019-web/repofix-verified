@@ -35,6 +35,19 @@ def compute_patch_policy_specification_fingerprint(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def compute_policy_verification_fingerprint(
+    result: "PolicyVerificationResult",
+) -> str:
+    """Hash the complete policy-verification result using canonical JSON."""
+    canonical = json.dumps(
+        result.model_dump(mode="json"),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class PolicyRuleId(StrEnum):
     PROTECTED_FILE_INTEGRITY = "protected_file_integrity"
     FORBIDDEN_PATH_PRESENT = "forbidden_path_present"

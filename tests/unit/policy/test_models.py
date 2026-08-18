@@ -6,11 +6,15 @@ from pydantic import ValidationError
 from repofix.hidden import compute_hidden_verification_fingerprint
 from repofix.policy import (
     FORBIDDEN_PATH_PRESENT_SUMMARY,
+    POLICY_VERIFICATION_FAILED_SUMMARY,
     PatchPolicySpecification,
     PolicyFinding,
     PolicyRuleId,
+    PolicyVerificationResult,
+    PolicyVerificationStatus,
     WorkspaceFileReference,
     compute_patch_policy_specification_fingerprint,
+    compute_policy_verification_fingerprint,
     verify_patch_policy,
 )
 from .conftest import PreparedPolicy
@@ -149,4 +153,109 @@ def test_policy_result_is_immutable_and_status_matches_findings(
     with pytest.raises(ValidationError):
         type(result).model_validate(
             {**result.model_dump(), "status": "policy_failed"}
+        )
+
+
+def test_policy_result_fingerprint_is_deterministic_and_canonical(
+    prepared_policy: PreparedPolicy,
+) -> None:
+    chain = prepared_policy.hidden_chain
+    public = chain.public
+    result = verify_patch_policy(
+        workspace_root=public.workspace,
+        task=public.task,
+        policy_specification=prepared_policy.specification,
+        proposal=public.proposal,
+        application_result=public.application,
+        post_patch_reproduction_result=public.post_patch,
+        regression_verification_result=chain.regression,
+        hidden_verification_result=prepared_policy.hidden_result,
+    )
+    equivalent = PolicyVerificationResult.model_validate(result.model_dump())
+
+    assert compute_policy_verification_fingerprint(result) == (
+        compute_policy_verification_fingerprint(result)
+    )
+    assert compute_policy_verification_fingerprint(equivalent) == (
+        compute_policy_verification_fingerprint(result)
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("task_id", "different-task"),
+        ("proposal_digest", "e" * 64),
+        ("hidden_verification_fingerprint", "d" * 64),
+        ("status", PolicyVerificationStatus.POLICY_FAILED),
+        ("verification_summary", POLICY_VERIFICATION_FAILED_SUMMARY),
+    ],
+)
+def test_policy_result_fingerprint_is_sensitive_to_identity_fields(
+    prepared_policy: PreparedPolicy,
+    field: str,
+    value: object,
+) -> None:
+    chain = prepared_policy.hidden_chain
+    public = chain.public
+    result = verify_patch_policy(
+        workspace_root=public.workspace,
+        task=public.task,
+        policy_specification=prepared_policy.specification,
+        proposal=public.proposal,
+        application_result=public.application,
+        post_patch_reproduction_result=public.post_patch,
+        regression_verification_result=chain.regression,
+        hidden_verification_result=prepared_policy.hidden_result,
+    )
+
+    changed = result.model_copy(update={field: value})
+
+    assert compute_policy_verification_fingerprint(changed) != (
+        compute_policy_verification_fingerprint(result)
+    )
+
+
+def test_policy_result_fingerprint_includes_findings_and_canonical_order(
+    prepared_policy: PreparedPolicy,
+) -> None:
+    chain = prepared_policy.hidden_chain
+    public = chain.public
+    passing = verify_patch_policy(
+        workspace_root=public.workspace,
+        task=public.task,
+        policy_specification=prepared_policy.specification,
+        proposal=public.proposal,
+        application_result=public.application,
+        post_patch_reproduction_result=public.post_patch,
+        regression_verification_result=chain.regression,
+        hidden_verification_result=prepared_policy.hidden_result,
+    )
+    findings = (
+        PolicyFinding(
+            rule_id=PolicyRuleId.FORBIDDEN_PATH_PRESENT,
+            path="conftest.py",
+            summary=FORBIDDEN_PATH_PRESENT_SUMMARY,
+        ),
+        PolicyFinding(
+            rule_id=PolicyRuleId.FORBIDDEN_PATH_PRESENT,
+            path="tests/conftest.py",
+            summary=FORBIDDEN_PATH_PRESENT_SUMMARY,
+        ),
+    )
+    failed = PolicyVerificationResult.model_validate(
+        {
+            **passing.model_dump(),
+            "status": PolicyVerificationStatus.POLICY_FAILED,
+            "findings": findings,
+            "verification_summary": POLICY_VERIFICATION_FAILED_SUMMARY,
+        }
+    )
+
+    assert compute_policy_verification_fingerprint(failed) != (
+        compute_policy_verification_fingerprint(passing)
+    )
+    with pytest.raises(ValidationError, match="sorted and unique"):
+        PolicyVerificationResult.model_validate(
+            {**failed.model_dump(), "findings": tuple(reversed(findings))}
         )

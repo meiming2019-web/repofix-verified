@@ -257,6 +257,23 @@ compare with the gold patch. `policy_passed` therefore means only that these dec
 preserved; it is not a universal correctness or repair-success verdict. Semantic suspicious-code
 heuristics are deliberately deferred, and the Final Evaluator Verdict has not run.
 
+## Final evaluator verdict
+
+Final Evaluation is a strict-success-only terminal artifact. It runs only after confirmed original
+reproduction, a passing regression baseline, controlled application, absence of the original
+behavior, passing public regression and evaluator-only hidden commands, and protected workspace
+policy verification have all succeeded with an empty policy finding set.
+
+`evaluator_passed` means only that the exact candidate satisfied every configured RepoFix
+verification gate for this task. It is not proof of universal correctness, equivalence to the gold
+patch, or absence of unknown regressions. Upstream failures remain authoritative results of their
+own stages; Final Evaluation defines no generic final `failed` or `inconclusive` result.
+
+Final Evaluation is pure aggregation over immutable artifacts. It executes no command, does not
+inspect the workspace, and does not use the evaluator's gold patch for candidate classification.
+Future `RunResult`, verified-resolution metrics, benchmark reporting, and stronger evaluator
+isolation may aggregate stopping stages and cohort outcomes, but are outside this milestone.
+
 ## Troubleshooting
 
 Check that `OPENAI_API_KEY` is present in the environment, the selected model is available to your

@@ -11,6 +11,7 @@ from repofix.policy.models import (
     PolicyVerificationResult,
     PolicyVerificationStatus,
     compute_patch_policy_specification_fingerprint,
+    compute_policy_verification_fingerprint,
 )
 from repofix.policy.verification import verify_patch_policy
 from repofix.tasks.spec import PatchPolicySpecification, WorkspaceFileReference
@@ -28,5 +29,6 @@ __all__ = [
     "PolicyVerificationStatus",
     "WorkspaceFileReference",
     "compute_patch_policy_specification_fingerprint",
+    "compute_policy_verification_fingerprint",
     "verify_patch_policy",
 ]
